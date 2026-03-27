@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model SubredditTarget {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. "japantravel"
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  posts     MonitoredPost[]
+}
+
+model KeywordFilter {
+  id        String   @id @default(cuid())
+  keyword   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model MonitoredPost {
+  id            String   @id @default(cuid())
+  redditId      String   @unique // e.g. "t3_abc123"
+  subreddit     String
+  title         String
+  selftext      String   @default("")
+  author        String
+  url           String
+  permalink     String
+  score         Int      @default(0)
+  numComments   Int      @default(0)
+  createdUtc    DateTime
+  fetchedAt     DateTime @default(now())
+  relevanceScore Float   @default(0)
+  status        String   @default("new") // new, queued, replied, dismissed
+  matchedKeywords String @default("") // comma-separated
+
+  subredditTarget   SubredditTarget? @relation(fields: [subredditTargetId], references: [id])
+  subredditTargetId String?
+
+  replies DraftReply[]
+}
+
+model DraftReply {
+  id        String   @id @default(cuid())
+  content   String
+  status    String   @default("draft") // draft, scheduled, posted, failed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scheduledFor DateTime?
+  postedAt     DateTime?
+  redditCommentId String?
+  errorMessage    String?
+
+  post   MonitoredPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String
+}
+
+model AppSettings {
+  id    String @id @default("default")
+  key   String @unique
+  value String
+}
