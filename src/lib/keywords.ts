@@ -1,57 +1,79 @@
 import { prisma } from "./prisma";
 
-const DEFAULT_KEYWORDS = [
-  "camping japan",
-  "camp japan",
-  "camping in japan",
-  "japan camping",
-  "japanese camping",
-  "tent japan",
-  "campsite japan",
-  "campground japan",
-  "outdoor japan",
-  "backpacking japan",
-  "hiking japan camp",
-  "wild camping japan",
-  "car camping japan",
-  "glamping japan",
-  "fuji camping",
-  "hokkaido camping",
-];
+// Japan-specific subreddits where single outdoor keywords are relevant
+const JAPAN_SUBREDDITS = new Set([
+  "japantravel",
+  "japantraveltips",
+  "japanlife",
+  "japanoutdoors",
+  "japanpics",
+  "movingtojapan",
+  "japan",
+]);
 
-export async function getKeywords(): Promise<string[]> {
+export function isJapanSubreddit(subreddit: string): boolean {
+  return JAPAN_SUBREDDITS.has(subreddit.toLowerCase());
+}
+
+// Get keywords for a specific project
+export async function getKeywordsForProject(
+  projectId: string
+): Promise<{ global: string[]; contextual: string[] }> {
   const dbKeywords = await prisma.keywordFilter.findMany({
-    where: { enabled: true },
+    where: { projectId, enabled: true },
   });
 
   if (dbKeywords.length > 0) {
-    return dbKeywords.map((k) => k.keyword.toLowerCase());
+    return {
+      global: dbKeywords.filter((k) => k.isGlobal).map((k) => k.keyword.toLowerCase()),
+      contextual: dbKeywords.filter((k) => !k.isGlobal).map((k) => k.keyword.toLowerCase()),
+    };
   }
 
-  return DEFAULT_KEYWORDS;
+  // No keywords configured — return empty (project must set up its own)
+  return { global: [], contextual: [] };
+}
+
+// Match whole words/phrases only — "band" won't match "husband"
+function matchesWholeWord(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b${escaped}\\b`);
+  return regex.test(text);
 }
 
 export function calculateRelevance(
   title: string,
   selftext: string,
-  keywords: string[]
+  keywords: { global: string[]; contextual: string[] },
+  subreddit?: string
 ): { score: number; matched: string[] } {
   const text = `${title} ${selftext}`.toLowerCase();
+  const titleLower = title.toLowerCase();
   const matched: string[] = [];
   let score = 0;
 
-  for (const keyword of keywords) {
-    if (text.includes(keyword)) {
+  // Global keywords match in any subreddit
+  for (const keyword of keywords.global) {
+    if (matchesWholeWord(text, keyword)) {
       matched.push(keyword);
-      // Multi-word keywords are more specific, so score higher
       const wordCount = keyword.split(" ").length;
       score += wordCount * 10;
     }
   }
 
-  // Boost for title matches (more visible/relevant)
-  for (const keyword of keywords) {
-    if (title.toLowerCase().includes(keyword)) {
+  // Contextual keywords only match in Japan-specific subreddits
+  if (subreddit && isJapanSubreddit(subreddit)) {
+    for (const keyword of keywords.contextual) {
+      if (matchesWholeWord(text, keyword) && !matched.includes(keyword)) {
+        matched.push(keyword);
+        score += 15;
+      }
+    }
+  }
+
+  // Boost for title matches
+  for (const kw of matched) {
+    if (matchesWholeWord(titleLower, kw)) {
       score += 15;
     }
   }

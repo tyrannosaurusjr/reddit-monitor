@@ -1,7 +1,17 @@
 const REDDIT_BASE_URL = "https://oauth.reddit.com";
 const REDDIT_AUTH_URL = "https://www.reddit.com/api/v1/access_token";
+const REDDIT_PUBLIC_URL = "https://www.reddit.com";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
+
+function hasOAuthCredentials(): boolean {
+  return !!(
+    process.env.REDDIT_CLIENT_ID &&
+    process.env.REDDIT_CLIENT_SECRET &&
+    process.env.REDDIT_USERNAME &&
+    process.env.REDDIT_PASSWORD
+  );
+}
 
 export async function getRedditAccessToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) {
@@ -46,6 +56,7 @@ export async function getRedditAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
+// Authenticated fetch (requires OAuth creds)
 async function redditFetch(endpoint: string, options: RequestInit = {}) {
   const token = await getRedditAccessToken();
   const res = await fetch(`${REDDIT_BASE_URL}${endpoint}`, {
@@ -60,6 +71,25 @@ async function redditFetch(endpoint: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     throw new Error(`Reddit API error: ${res.status} ${await res.text()}`);
+  }
+
+  return res.json();
+}
+
+// Public JSON fetch (no auth needed — read-only)
+async function redditPublicFetch(path: string) {
+  // Insert .json before query params: /r/sub/new?limit=25 -> /r/sub/new.json?limit=25
+  const [pathname, query] = path.split("?");
+  const url = `${REDDIT_PUBLIC_URL}${pathname}.json${query ? `?${query}` : ""}`;
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "RedditReach/1.0.0",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Reddit public API error: ${res.status} ${await res.text()}`);
   }
 
   return res.json();
@@ -84,7 +114,13 @@ export async function fetchSubredditPosts(
   sort: "new" | "hot" = "new",
   limit: number = 25
 ): Promise<RedditPost[]> {
-  const data = await redditFetch(`/r/${subreddit}/${sort}?limit=${limit}`);
+  // Use OAuth if credentials are available, otherwise fall back to public JSON API
+  if (hasOAuthCredentials()) {
+    const data = await redditFetch(`/r/${subreddit}/${sort}?limit=${limit}`);
+    return data.data.children.map((child: { data: RedditPost }) => child.data);
+  }
+
+  const data = await redditPublicFetch(`/r/${subreddit}/${sort}?limit=${limit}`);
   return data.data.children.map((child: { data: RedditPost }) => child.data);
 }
 
@@ -92,6 +128,10 @@ export async function postComment(
   parentFullname: string,
   text: string
 ): Promise<{ id: string; name: string }> {
+  if (!hasOAuthCredentials()) {
+    throw new Error("Cannot post comments without Reddit API credentials. Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, and REDDIT_PASSWORD in .env");
+  }
+
   const token = await getRedditAccessToken();
   const res = await fetch(`${REDDIT_BASE_URL}/api/comment`, {
     method: "POST",

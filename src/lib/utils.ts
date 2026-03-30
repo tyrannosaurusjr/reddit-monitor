@@ -20,7 +20,7 @@ export function formatRelativeTime(date: Date): string {
 }
 
 export function getOptimalPostTime(): Date {
-  // Schedule for next optimal window: 9-11 AM EST on weekdays
+  // Default: schedule for next optimal window: 9-11 AM EST on weekdays
   const now = new Date();
   const target = new Date(now);
 
@@ -37,5 +37,28 @@ export function getOptimalPostTime(): Date {
   if (day === 0) target.setDate(target.getDate() + 1); // Sunday -> Monday
   if (day === 6) target.setDate(target.getDate() + 2); // Saturday -> Monday
 
+  return target;
+}
+
+// Build an optimal time from analytics best-window data
+export function getOptimalPostTimeFromAnalytics(
+  bestWindows: Array<{ dayOfWeek: number; hourUtc: number; engagementScore: number }>
+): Date {
+  if (bestWindows.length === 0) return getOptimalPostTime();
+
+  const now = new Date();
+  const best = bestWindows[0]; // highest engagement window
+
+  // Find the next occurrence of this day/hour
+  const target = new Date(now);
+  target.setUTCHours(best.hourUtc, 0, 0, 0);
+
+  // Advance to the correct day of week
+  const currentDay = target.getUTCDay();
+  let daysAhead = best.dayOfWeek - currentDay;
+  if (daysAhead < 0) daysAhead += 7;
+  if (daysAhead === 0 && target <= now) daysAhead = 7;
+
+  target.setDate(target.getDate() + daysAhead);
   return target;
 }

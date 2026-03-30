@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelativeTime } from "@/lib/utils";
+import { useProject } from "@/lib/project-context";
 import {
   Send,
   Clock,
@@ -26,6 +27,7 @@ interface Reply {
   postedAt: string | null;
   redditCommentId: string | null;
   errorMessage: string | null;
+  staggerDelay: number | null;
   post: {
     id: string;
     title: string;
@@ -35,6 +37,7 @@ interface Reply {
 }
 
 export default function RepliesPage() {
+  const { activeProject } = useProject();
   const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("draft");
@@ -42,15 +45,16 @@ export default function RepliesPage() {
   const [editContent, setEditContent] = useState("");
 
   const fetchReplies = (status: string) => {
+    if (!activeProject) return;
     setLoading(true);
-    fetch(`/api/replies?status=${status}`)
+    fetch(`/api/replies?status=${status}&projectId=${activeProject.id}`)
       .then((r) => r.json())
       .then(setReplies)
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchReplies(tab); }, [tab]);
+  useEffect(() => { fetchReplies(tab); }, [tab, activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteReply = async (id: string) => {
     await fetch("/api/replies", {
@@ -102,12 +106,16 @@ export default function RepliesPage() {
     }
   };
 
+  if (!activeProject) {
+    return <p className="text-gray-500">Select a project from the sidebar.</p>;
+  }
+
   return (
     <div>
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900">Replies</h2>
         <p className="text-gray-500 text-sm mt-1">
-          Manage your draft, scheduled, and posted replies
+          Manage replies for <span className="font-medium">{activeProject.name}</span>
         </p>
       </div>
 
@@ -193,6 +201,9 @@ export default function RepliesPage() {
                         Created {formatRelativeTime(new Date(reply.createdAt))}
                         {reply.scheduledFor && (
                           <> | Scheduled for {new Date(reply.scheduledFor).toLocaleString()}</>
+                        )}
+                        {reply.staggerDelay != null && reply.staggerDelay > 0 && (
+                          <span className="text-purple-500"> | +{reply.staggerDelay}m stagger</span>
                         )}
                         {reply.postedAt && (
                           <> | Posted {formatRelativeTime(new Date(reply.postedAt))}</>

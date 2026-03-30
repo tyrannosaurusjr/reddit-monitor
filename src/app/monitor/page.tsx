@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useProject } from "@/lib/project-context";
 import { Plus, Trash2, Radio, RefreshCw, Power, PowerOff } from "lucide-react";
 
 interface Subreddit {
@@ -16,6 +17,7 @@ interface Subreddit {
 }
 
 export default function MonitorPage() {
+  const { activeProject } = useProject();
   const [subreddits, setSubreddits] = useState<Subreddit[]>([]);
   const [newName, setNewName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -23,21 +25,25 @@ export default function MonitorPage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
 
   const fetchSubreddits = () => {
-    fetch("/api/subreddits")
+    if (!activeProject) return;
+    fetch(`/api/subreddits?projectId=${activeProject.id}`)
       .then((r) => r.json())
       .then(setSubreddits)
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchSubreddits(); }, []);
+  useEffect(() => {
+    setLoading(true);
+    fetchSubreddits();
+  }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addSubreddit = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !activeProject) return;
     const res = await fetch("/api/subreddits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName }),
+      body: JSON.stringify({ name: newName, projectId: activeProject.id }),
     });
     if (res.ok) {
       setNewName("");
@@ -64,10 +70,15 @@ export default function MonitorPage() {
   };
 
   const runScan = async () => {
+    if (!activeProject) return;
     setScanning(true);
     setScanResult(null);
     try {
-      const res = await fetch("/api/posts/scan", { method: "POST" });
+      const res = await fetch("/api/posts/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id }),
+      });
       const data = await res.json();
       if (res.ok) {
         setScanResult(`Scanned ${data.scanned} subreddits, found ${data.found} new relevant posts`);
@@ -78,8 +89,13 @@ export default function MonitorPage() {
       setScanResult("Network error during scan");
     } finally {
       setScanning(false);
+      fetchSubreddits();
     }
   };
+
+  if (!activeProject) {
+    return <p className="text-gray-500">Select a project from the sidebar.</p>;
+  }
 
   return (
     <div>
@@ -87,7 +103,7 @@ export default function MonitorPage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Monitor</h2>
           <p className="text-gray-500 text-sm mt-1">
-            Manage target subreddits and scan for relevant posts
+            Manage subreddits for <span className="font-medium">{activeProject.name}</span>
           </p>
         </div>
         <Button onClick={runScan} disabled={scanning}>
@@ -105,7 +121,7 @@ export default function MonitorPage() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">Add Subreddit</CardTitle>
-          <CardDescription>Enter a subreddit name to monitor for relevant posts</CardDescription>
+          <CardDescription>Enter a subreddit name to monitor for {activeProject.name}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">

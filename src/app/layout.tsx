@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { ProjectProvider } from "@/lib/project-context";
+import { AuthSessionProvider } from "@/components/session-provider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -11,7 +13,7 @@ const geistSans = localFont({
 
 export const metadata: Metadata = {
   title: "RedditReach — Reddit Outreach Platform",
-  description: "Monitor subreddits, draft replies, and schedule outreach for jacamp.com",
+  description: "Monitor subreddits, draft replies, and schedule outreach across multiple projects",
 };
 
 export default function RootLayout({
@@ -22,12 +24,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} font-sans antialiased`}>
-        <div className="flex min-h-screen">
-          <Nav />
-          <main className="flex-1 overflow-auto">
-            <div className="p-8">{children}</div>
-          </main>
-        </div>
+        <AuthSessionProvider>
+          <ProjectProvider>
+            <div className="flex min-h-screen">
+              <Nav />
+              <main className="flex-1 overflow-auto">
+                <div className="p-8">{children}</div>
+              </main>
+            </div>
+          </ProjectProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

@@ -7,25 +7,116 @@ datasource db {
   provider = "sqlite"
 }
 
+// ─── Auth ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  // Stripe
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?
+  plan                 String    @default("free") // free, pro
+  planExpiresAt        DateTime?
+
+  accounts Account[]
+  sessions Session[]
+  projects Project[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── App ────────────────────────────────────────────────
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "JaCamp"
+  slug        String   // e.g. "jacamp"
+  siteUrl     String   @default("") // e.g. "jacamp.com"
+  description String   @default("")
+  color       String   @default("#f97316") // brand color for UI
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  subreddits SubredditTarget[]
+  keywords   KeywordFilter[]
+  posts      MonitoredPost[]
+  replies    DraftReply[]
+
+  @@unique([slug, userId])
+}
+
 model SubredditTarget {
   id        String   @id @default(cuid())
-  name      String   @unique // e.g. "japantravel"
+  name      String   // e.g. "japantravel"
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+
   posts     MonitoredPost[]
+
+  @@unique([name, projectId])
 }
 
 model KeywordFilter {
   id        String   @id @default(cuid())
   keyword   String
   enabled   Boolean  @default(true)
+  isGlobal  Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
 }
 
 model MonitoredPost {
   id            String   @id @default(cuid())
-  redditId      String   @unique // e.g. "t3_abc123"
+  redditId      String
   subreddit     String
   title         String
   selftext      String   @default("")
@@ -37,19 +128,41 @@ model MonitoredPost {
   createdUtc    DateTime
   fetchedAt     DateTime @default(now())
   relevanceScore Float   @default(0)
-  status        String   @default("new") // new, queued, replied, dismissed
-  matchedKeywords String @default("") // comma-separated
+  status        String   @default("new")
+  matchedKeywords String @default("")
+
+  isCrosspost       Boolean @default(false)
+  crosspostParentId String?
+  crosspostGroupId  String?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
 
   subredditTarget   SubredditTarget? @relation(fields: [subredditTargetId], references: [id])
   subredditTargetId String?
 
   replies DraftReply[]
+
+  @@unique([redditId, projectId])
+}
+
+model EngagementSnapshot {
+  id          String   @id @default(cuid())
+  subreddit   String
+  dayOfWeek   Int
+  hourUtc     Int
+  avgScore    Float    @default(0)
+  avgComments Float    @default(0)
+  postCount   Int      @default(0)
+  sampledAt   DateTime @default(now())
+
+  @@unique([subreddit, dayOfWeek, hourUtc])
 }
 
 model DraftReply {
   id        String   @id @default(cuid())
   content   String
-  status    String   @default("draft") // draft, scheduled, posted, failed
+  status    String   @default("draft")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -57,6 +170,12 @@ model DraftReply {
   postedAt     DateTime?
   redditCommentId String?
   errorMessage    String?
+
+  staggerGroup  Int?
+  staggerDelay  Int?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
 
   post   MonitoredPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   postId String

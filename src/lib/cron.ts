@@ -9,7 +9,7 @@ export function initCronJobs() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const cronSecret = process.env.CRON_SECRET || "redditreach-cron";
 
-  // Poll subreddits every 30 minutes
+  // Poll subreddits every 30 minutes (also samples engagement data)
   cron.schedule("*/30 * * * *", async () => {
     console.log("[Cron] Polling subreddits...");
     try {
@@ -18,13 +18,13 @@ export function initCronJobs() {
         headers: { Authorization: `Bearer ${cronSecret}` },
       });
       const data = await res.json();
-      console.log(`[Cron] Poll complete: scanned ${data.scanned}, found ${data.found}`);
+      console.log(`[Cron] Poll complete: scanned ${data.scanned}, found ${data.found}, crossposts ${data.crossposts}`);
     } catch (err) {
       console.error("[Cron] Poll failed:", err);
     }
   });
 
-  // Post scheduled replies every 15 minutes
+  // Post scheduled replies every 15 minutes (respects stagger timing)
   cron.schedule("*/15 * * * *", async () => {
     console.log("[Cron] Checking scheduled replies...");
     try {
