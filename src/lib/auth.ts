@@ -7,14 +7,19 @@ export const authOptions: NextAuthOptions = {
   // No adapter — use JWT sessions instead of database sessions
   // We create/find the user manually in the signIn callback
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-    GitHubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID || "",
-      clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-    }),
+    // Only register providers when credentials are configured
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [GoogleProvider({
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        })]
+      : []),
+    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+      ? [GitHubProvider({
+          clientId: process.env.GITHUB_CLIENT_ID,
+          clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        })]
+      : []),
   ],
   session: {
     strategy: "jwt",
@@ -87,15 +92,7 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
-  debug: true,
-  logger: {
-    error(code, metadata) {
-      console.error("[NextAuth Error]", code, metadata);
-    },
-    warn(code) {
-      console.warn("[NextAuth Warn]", code);
-    },
-  },
+  debug: process.env.NODE_ENV === "development",
 };
 
 export async function getAuthSession() {
