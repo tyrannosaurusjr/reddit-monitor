@@ -41,9 +41,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    fetch("/api/projects")
+    fetch("/api/projects", { redirect: "error" })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to fetch projects");
+        const contentType = r.headers.get("content-type");
+        if (!contentType?.includes("application/json")) throw new Error("Not JSON");
         return r.json();
       })
       .then((data: Project[]) => {

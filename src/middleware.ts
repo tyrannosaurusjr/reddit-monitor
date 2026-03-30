@@ -5,7 +5,7 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req });
   const { pathname } = req.nextUrl;
 
-  // Allow auth routes, login page, and public API routes
+  // Allow public routes
   if (
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron") ||
@@ -18,10 +18,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Redirect unauthenticated users to login
   if (!token) {
-    const loginUrl = new URL("/login", req.url);
-    return NextResponse.redirect(loginUrl);
+    // API routes get 401 JSON, pages get redirected to login
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
   return NextResponse.next();
