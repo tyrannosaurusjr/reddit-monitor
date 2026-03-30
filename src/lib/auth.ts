@@ -1,12 +1,11 @@
 import { NextAuthOptions, getServerSession } from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import { prisma } from "./prisma";
-import type { Adapter } from "next-auth/adapters";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as Adapter,
+  // No adapter — use JWT sessions instead of database sessions
+  // We create/find the user manually in the signIn callback
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
@@ -18,19 +17,61 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: {
-    strategy: "database",
+    strategy: "jwt",
   },
   callbacks: {
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
+    async signIn({ user, account }) {
+      if (!user.email || !account) return false;
 
-        // Fetch plan info
-        const dbUser = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { plan: true, planExpiresAt: true },
+      try {
+        // Find or create user in our database
+        let dbUser = await prisma.user.findUnique({
+          where: { email: user.email },
         });
-        session.user.plan = dbUser?.plan || "free";
+
+        if (!dbUser) {
+          dbUser = await prisma.user.create({
+            data: {
+              email: user.email,
+              name: user.name || null,
+              image: user.image || null,
+            },
+          });
+        } else if (user.name || user.image) {
+          // Update profile info if changed
+          await prisma.user.update({
+            where: { id: dbUser.id },
+            data: {
+              name: user.name || dbUser.name,
+              image: user.image || dbUser.image,
+            },
+          });
+        }
+
+        return true;
+      } catch (error) {
+        console.error("[Auth] signIn error:", error);
+        return false;
+      }
+    },
+    async jwt({ token, user }) {
+      if (user?.email) {
+        // On initial sign in, attach the DB user ID
+        const dbUser = await prisma.user.findUnique({
+          where: { email: user.email },
+          select: { id: true, plan: true },
+        });
+        if (dbUser) {
+          token.userId = dbUser.id;
+          token.plan = dbUser.plan;
+        }
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token.userId) {
+        session.user.id = token.userId as string;
+        session.user.plan = (token.plan as string) || "free";
       }
       return session;
     },
@@ -53,7 +94,6 @@ export async function getAuthSession() {
   return getServerSession(authOptions);
 }
 
-// Get the current user ID or throw
 export async function requireAuth(): Promise<string> {
   const session = await getAuthSession();
   if (!session?.user?.id) {
@@ -68,7 +108,7 @@ export const PLAN_LIMITS = {
     maxProjects: 1,
     maxSubredditsPerProject: 3,
     maxKeywordsPerProject: 10,
-    scanInterval: "manual", // no cron
+    scanInterval: "manual",
   },
   pro: {
     maxProjects: 10,
@@ -88,7 +128,6 @@ export async function getUserPlan(userId: string): Promise<PlanType> {
 
   if (!user) return "free";
 
-  // Check if pro has expired
   if (user.plan === "pro" && user.planExpiresAt && user.planExpiresAt < new Date()) {
     await prisma.user.update({
       where: { id: userId },
