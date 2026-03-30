@@ -5,10 +5,15 @@ export async function GET() {
   try {
     // Test DB connection
     const count = await prisma.user.count();
+    const projects = await prisma.project.findMany({
+      where: { enabled: true },
+      select: { id: true, name: true, _count: { select: { subreddits: true } } },
+    });
     return NextResponse.json({
       status: "ok",
       db: "connected",
       users: count,
+      projects,
       env: {
         hasDbUrl: !!process.env.DATABASE_URL,
         hasDbToken: !!process.env.DATABASE_AUTH_TOKEN,
