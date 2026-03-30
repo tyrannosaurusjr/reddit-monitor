@@ -7,13 +7,26 @@ export async function GET() {
     const count = await prisma.user.count();
     const projects = await prisma.project.findMany({
       where: { enabled: true },
-      select: { id: true, name: true, _count: { select: { subreddits: true } } },
+      include: { subreddits: { where: { enabled: true } } },
     });
+
+    // Also test the exact cron query
+    let cronDebug;
+    try {
+      const cronProjects = await prisma.project.findMany({
+        where: { enabled: true },
+        include: { subreddits: { where: { enabled: true } } },
+      });
+      cronDebug = { count: cronProjects.length, names: cronProjects.map(p => p.name), subCounts: cronProjects.map(p => p.subreddits.length) };
+    } catch (e) {
+      cronDebug = { error: e instanceof Error ? e.message : String(e) };
+    }
     return NextResponse.json({
       status: "ok",
       db: "connected",
       users: count,
-      projects,
+      projects: projects.map(p => ({ id: p.id, name: p.name, subs: p.subreddits.length })),
+      cronDebug,
       env: {
         hasDbUrl: !!process.env.DATABASE_URL,
         hasDbToken: !!process.env.DATABASE_AUTH_TOKEN,
