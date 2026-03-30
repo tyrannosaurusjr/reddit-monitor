@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { useSession } from "next-auth/react";
 
 export interface Project {
   id: string;
@@ -30,16 +31,24 @@ const ProjectContext = createContext<ProjectContextType>({
 });
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
+  const { status } = useSession();
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProjectState] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProjects = () => {
+    if (status !== "authenticated") {
+      setLoading(false);
+      return;
+    }
     fetch("/api/projects")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to fetch projects");
+        return r.json();
+      })
       .then((data: Project[]) => {
+        if (!Array.isArray(data)) return;
         setProjects(data);
-        // Restore active project from localStorage or pick first
         const savedSlug = typeof window !== "undefined" ? localStorage.getItem("activeProjectSlug") : null;
         const saved = savedSlug ? data.find((p) => p.slug === savedSlug) : null;
         if (saved) {
@@ -59,7 +68,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  useEffect(() => { fetchProjects(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchProjects(); }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ProjectContext.Provider value={{ projects, activeProject, setActiveProject, loading, refreshProjects: fetchProjects }}>
