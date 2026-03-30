@@ -21,12 +21,24 @@ export async function GET() {
     } catch (e) {
       cronDebug = { error: e instanceof Error ? e.message : String(e) };
     }
+
+    // Test Reddit public API
+    let redditTest;
+    try {
+      const res = await fetch("https://www.reddit.com/r/japantravel/new.json?limit=1", {
+        headers: { "User-Agent": "RedditReach/1.0.0" },
+      });
+      redditTest = { status: res.status, ok: res.ok };
+    } catch (e) {
+      redditTest = { error: e instanceof Error ? e.message : String(e) };
+    }
     return NextResponse.json({
       status: "ok",
       db: "connected",
       users: count,
       projects: projects.map(p => ({ id: p.id, name: p.name, subs: p.subreddits.length })),
       cronDebug,
+      redditTest,
       env: {
         hasDbUrl: !!process.env.DATABASE_URL,
         hasDbToken: !!process.env.DATABASE_AUTH_TOKEN,
