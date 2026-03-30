@@ -23,47 +23,55 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       if (!user.email || !account) return false;
 
+      // Always allow sign-in — DB user creation is best-effort
       try {
-        // Find or create user in our database
-        let dbUser = await prisma.user.findUnique({
+        const dbUser = await prisma.user.findUnique({
           where: { email: user.email },
         });
 
         if (!dbUser) {
-          dbUser = await prisma.user.create({
+          await prisma.user.create({
             data: {
               email: user.email,
               name: user.name || null,
               image: user.image || null,
             },
           });
-        } else if (user.name || user.image) {
-          // Update profile info if changed
-          await prisma.user.update({
-            where: { id: dbUser.id },
-            data: {
-              name: user.name || dbUser.name,
-              image: user.image || dbUser.image,
-            },
-          });
         }
-
-        return true;
       } catch (error) {
-        console.error("[Auth] signIn error:", error);
-        return false;
+        // Log but don't block sign-in — user will be created on next API call
+        console.error("[Auth] DB user creation failed (non-blocking):", error);
       }
+
+      return true;
     },
     async jwt({ token, user }) {
       if (user?.email) {
-        // On initial sign in, attach the DB user ID
-        const dbUser = await prisma.user.findUnique({
-          where: { email: user.email },
-          select: { id: true, plan: true },
-        });
-        if (dbUser) {
+        try {
+          // Find or create DB user on initial sign in
+          let dbUser = await prisma.user.findUnique({
+            where: { email: user.email },
+            select: { id: true, plan: true },
+          });
+
+          if (!dbUser) {
+            dbUser = await prisma.user.create({
+              data: {
+                email: user.email,
+                name: user.name || null,
+                image: user.image || null,
+              },
+              select: { id: true, plan: true },
+            });
+          }
+
           token.userId = dbUser.id;
           token.plan = dbUser.plan;
+        } catch (error) {
+          console.error("[Auth] JWT user lookup failed:", error);
+          // Use email as fallback ID so session still works
+          token.userId = user.email;
+          token.plan = "free";
         }
       }
       return token;
