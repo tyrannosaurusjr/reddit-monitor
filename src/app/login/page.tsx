@@ -1,10 +1,23 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+const errorMessages: Record<string, string> = {
+  OAuthSignin: "Could not start sign-in. The provider may be misconfigured.",
+  OAuthCallback: "Sign-in failed during the callback step.",
+  OAuthCreateAccount: "Could not create your account.",
+  Callback: "Something went wrong during sign-in.",
+  Default: "An unexpected error occurred. Please try again.",
+};
+
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-sm">
@@ -15,6 +28,11 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">
             Sign in to manage your outreach projects
           </p>
+          {error && (
+            <p className="text-sm text-red-600 mt-2 bg-red-50 rounded-md px-3 py-2">
+              {errorMessages[error] || errorMessages.Default}
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
           <Button
@@ -43,5 +61,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
