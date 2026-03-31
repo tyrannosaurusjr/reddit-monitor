@@ -90,11 +90,12 @@ model Project {
 }
 
 model SubredditTarget {
-  id        String   @id @default(cuid())
-  name      String   // e.g. "japantravel"
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String   // e.g. "japantravel"
+  enabled     Boolean  @default(true)
+  contextual  Boolean  @default(false) // true = broad keywords match here; false = only global/specific keywords
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId String

@@ -117,7 +117,9 @@ async function main() {
       where: { projectId: project.id, enabled: true },
     });
 
-    const contextualSubs = new Set(project.subreddits.map(s => s.name.toLowerCase()));
+    const contextualSubs = new Set(
+      project.subreddits.filter((s: any) => s.contextual).map((s: any) => s.name.toLowerCase())
+    );
     const keywords = {
       global: dbKeywords.filter(k => k.isGlobal).map(k => k.keyword.toLowerCase()),
       contextual: dbKeywords.filter(k => !k.isGlobal).map(k => k.keyword.toLowerCase()),

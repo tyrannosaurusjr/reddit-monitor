@@ -146,11 +146,14 @@ export async function getKeywordsForProject(
     }),
     prisma.subredditTarget.findMany({
       where: { projectId, enabled: true },
-      select: { name: true },
+      select: { name: true, contextual: true },
     }),
   ]);
 
-  const contextualSubs = new Set(subreddits.map((s) => s.name.toLowerCase()));
+  // Only subreddits marked as contextual allow broad keyword matching
+  const contextualSubs = new Set(
+    subreddits.filter((s) => s.contextual).map((s) => s.name.toLowerCase())
+  );
 
   if (dbKeywords.length > 0) {
     return {
