@@ -99,10 +99,16 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    if (!activeProject) return;
+    if (!activeProject) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     fetch(`/api/stats?projectId=${activeProject.id}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        return r.json();
+      })
       .then(setStats)
       .catch(console.error)
       .finally(() => setLoading(false));
