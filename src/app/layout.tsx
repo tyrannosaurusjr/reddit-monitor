@@ -14,6 +14,13 @@ const geistSans = localFont({
 export const metadata: Metadata = {
   title: "RedditReach — Reddit Outreach Platform",
   description: "Monitor subreddits, draft replies, and schedule outreach across multiple projects",
+  manifest: "/manifest.json",
+  themeColor: "#f97316",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "RedditReach",
+  },
 };
 
 export default function RootLayout({
@@ -23,6 +30,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+      </head>
       <body className={`${geistSans.variable} font-sans antialiased`}>
         <AuthSessionProvider>
           <ProjectProvider>
