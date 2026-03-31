@@ -1,37 +1,31 @@
 import { prisma } from "./prisma";
 
-// Japan-specific subreddits where single outdoor keywords are relevant
-const JAPAN_SUBREDDITS = new Set([
-  "japantravel",
-  "japantraveltips",
-  "japanlife",
-  "japanoutdoors",
-  "japanpics",
-  "movingtojapan",
-  "japan",
-]);
-
-export function isJapanSubreddit(subreddit: string): boolean {
-  return JAPAN_SUBREDDITS.has(subreddit.toLowerCase());
-}
-
 // Get keywords for a specific project
 export async function getKeywordsForProject(
   projectId: string
-): Promise<{ global: string[]; contextual: string[] }> {
-  const dbKeywords = await prisma.keywordFilter.findMany({
-    where: { projectId, enabled: true },
-  });
+): Promise<{ global: string[]; contextual: string[]; contextualSubs: Set<string> }> {
+  const [dbKeywords, subreddits] = await Promise.all([
+    prisma.keywordFilter.findMany({
+      where: { projectId, enabled: true },
+    }),
+    prisma.subredditTarget.findMany({
+      where: { projectId, enabled: true },
+      select: { name: true },
+    }),
+  ]);
+
+  // Contextual keywords match in ANY subreddit that belongs to this project
+  const contextualSubs = new Set(subreddits.map((s) => s.name.toLowerCase()));
 
   if (dbKeywords.length > 0) {
     return {
       global: dbKeywords.filter((k) => k.isGlobal).map((k) => k.keyword.toLowerCase()),
       contextual: dbKeywords.filter((k) => !k.isGlobal).map((k) => k.keyword.toLowerCase()),
+      contextualSubs,
     };
   }
 
-  // No keywords configured — return empty (project must set up its own)
-  return { global: [], contextual: [] };
+  return { global: [], contextual: [], contextualSubs };
 }
 
 // Match whole words/phrases only — "band" won't match "husband"
@@ -44,7 +38,7 @@ function matchesWholeWord(text: string, keyword: string): boolean {
 export function calculateRelevance(
   title: string,
   selftext: string,
-  keywords: { global: string[]; contextual: string[] },
+  keywords: { global: string[]; contextual: string[]; contextualSubs: Set<string> },
   subreddit?: string
 ): { score: number; matched: string[] } {
   const text = `${title} ${selftext}`.toLowerCase();
@@ -61,8 +55,8 @@ export function calculateRelevance(
     }
   }
 
-  // Contextual keywords only match in Japan-specific subreddits
-  if (subreddit && isJapanSubreddit(subreddit)) {
+  // Contextual keywords match in any of this project's own subreddits
+  if (subreddit && keywords.contextualSubs.has(subreddit.toLowerCase())) {
     for (const keyword of keywords.contextual) {
       if (matchesWholeWord(text, keyword) && !matched.includes(keyword)) {
         matched.push(keyword);
