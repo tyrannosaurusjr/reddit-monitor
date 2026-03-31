@@ -28,6 +28,34 @@ function matchesWholeWord(text: string, keyword: string): boolean {
   return new RegExp(`\\b${escaped}\\b`).test(text);
 }
 
+// Co-occurrence rules for ambiguous single-word keywords
+const CO_OCCURRENCE_RULES: Record<string, { boost: string[]; reject: string[] }> = {
+  metal: {
+    boost: ["show", "shows", "concert", "gig", "live", "tour", "album", "song", "band", "guitar", "drummer", "riff", "mosh", "fest", "festival", "venue", "record", "vinyl", "genre", "scene", "listen", "recommend"],
+    reject: ["shelf", "shelving", "detector", "roofing", "sheet metal", "welding", "fabrication", "alloy", "steel", "aluminum", "copper", "scrap metal", "metalwork", "machining"],
+  },
+  band: {
+    boost: ["show", "concert", "gig", "live", "tour", "album", "song", "music", "guitar", "vocalist", "genre", "venue", "festival", "record"],
+    reject: ["rubber band", "resistance band", "wrist band", "headband", "band aid", "bandwidth", "broadband"],
+  },
+  club: {
+    boost: ["dj", "dance", "music", "night", "nightlife", "party", "venue", "techno", "house", "edm"],
+    reject: ["golf club", "book club", "fight club", "country club", "club sandwich", "membership"],
+  },
+  record: {
+    boost: ["vinyl", "album", "listen", "music", "shop", "spin", "turntable", "pressing", "label"],
+    reject: ["world record", "record time", "track record", "medical record", "criminal record"],
+  },
+};
+
+function checkCoOccurrence(text: string, keyword: string): "boost" | "reject" | "neutral" {
+  const rule = CO_OCCURRENCE_RULES[keyword];
+  if (!rule) return "neutral";
+  for (const r of rule.reject) { if (text.includes(r)) return "reject"; }
+  for (const b of rule.boost) { if (text.includes(b)) return "boost"; }
+  return "neutral";
+}
+
 function calculateRelevance(
   title: string, selftext: string,
   keywords: { global: string[]; contextual: string[]; contextualSubs: Set<string> },
@@ -40,17 +68,25 @@ function calculateRelevance(
 
   for (const kw of keywords.global) {
     if (matchesWholeWord(text, kw)) {
+      if (kw.split(" ").length > 1) {
+        matched.push(kw);
+        score += kw.split(" ").length * 10;
+        continue;
+      }
+      const co = checkCoOccurrence(text, kw);
+      if (co === "reject") continue;
       matched.push(kw);
-      score += kw.split(" ").length * 10;
+      score += co === "boost" ? 20 : 10;
     }
   }
 
-  // Contextual keywords match in any of the project's own subreddits
   if (keywords.contextualSubs.has(subreddit.toLowerCase())) {
     for (const kw of keywords.contextual) {
       if (matchesWholeWord(text, kw) && !matched.includes(kw)) {
+        const co = checkCoOccurrence(text, kw);
+        if (co === "reject") continue;
         matched.push(kw);
-        score += 15;
+        score += co === "boost" ? 25 : 15;
       }
     }
   }
