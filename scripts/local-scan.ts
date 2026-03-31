@@ -175,6 +175,65 @@ async function main() {
 
     totalFound += projectFound;
     console.log(`  ${project.name}: scanned ${project.subreddits.length} subs, found ${projectFound} new posts`);
+
+    // --- Trending: grab hottest posts from each subreddit regardless of keywords ---
+    let trendingFound = 0;
+    const MIN_TRENDING_SCORE = 50; // Reddit upvotes threshold
+
+    for (const sub of project.subreddits) {
+      try {
+        const hotPosts = await fetchRedditPosts(sub.name, "hot", 10);
+
+        for (const post of hotPosts) {
+          // Only high-engagement posts
+          if (post.score < MIN_TRENDING_SCORE) continue;
+
+          const existing = await prisma.monitoredPost.findUnique({
+            where: { redditId_projectId: { redditId: post.name, projectId: project.id } },
+          });
+          // If it already exists as a keyword-matched post, skip (don't overwrite)
+          if (existing) continue;
+
+          await prisma.monitoredPost.create({
+            data: {
+              redditId: post.name,
+              subreddit: post.subreddit,
+              title: post.title,
+              selftext: post.selftext || "",
+              author: post.author,
+              url: post.url,
+              permalink: `https://reddit.com${post.permalink}`,
+              score: post.score,
+              numComments: post.num_comments,
+              createdUtc: new Date(post.created_utc * 1000),
+              relevanceScore: 0, // not keyword-matched
+              matchedKeywords: "",
+              projectId: project.id,
+              subredditTargetId: sub.id,
+              status: "trending",
+            },
+          });
+          trendingFound++;
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+      } catch (err) {
+        // Silently skip trending errors
+      }
+    }
+
+    if (trendingFound > 0) {
+      console.log(`  ${project.name}: found ${trendingFound} trending posts`);
+    }
+
+    // Clean up old trending posts (>3 days old) to keep the list fresh
+    await prisma.monitoredPost.deleteMany({
+      where: {
+        projectId: project.id,
+        status: "trending",
+        createdUtc: { lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+      },
+    });
   }
 
   console.log(`\n[${new Date().toISOString()}] Done — ${totalFound} total new posts`);

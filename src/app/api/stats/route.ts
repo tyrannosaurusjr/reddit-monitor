@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     subredditCount,
     recentPosts,
     topPosts,
+    trendingPosts,
   ] = await Promise.all([
     prisma.monitoredPost.count({ where: postWhere }),
     prisma.monitoredPost.count({ where: { ...postWhere, status: "new" } }),
@@ -54,6 +55,13 @@ export async function GET(req: NextRequest) {
       take: 50,
       select: { id: true, title: true, subreddit: true, permalink: true, relevanceScore: true, status: true, fetchedAt: true, createdUtc: true, score: true, numComments: true, matchedKeywords: true, author: true, selftext: true },
     }),
+    // Trending: hottest posts across monitored subreddits (no keyword match required)
+    prisma.monitoredPost.findMany({
+      where: { ...postWhere, status: "trending" },
+      orderBy: { score: "desc" },
+      take: 10,
+      select: { id: true, title: true, subreddit: true, permalink: true, score: true, numComments: true, author: true, selftext: true, createdUtc: true, fetchedAt: true },
+    }),
   ]);
 
   return NextResponse.json({
@@ -62,5 +70,6 @@ export async function GET(req: NextRequest) {
     subredditCount,
     recentPosts,
     topPosts,
+    trendingPosts,
   });
 }

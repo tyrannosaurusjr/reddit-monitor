@@ -43,12 +43,26 @@ interface TopPost extends PostSummary {
   createdUtc: string;
 }
 
+interface TrendingPost {
+  id: string;
+  title: string;
+  subreddit: string;
+  permalink: string;
+  score: number;
+  numComments: number;
+  author: string;
+  selftext: string;
+  createdUtc: string;
+  fetchedAt: string;
+}
+
 interface Stats {
   posts: { total: number; new: number; queued: number; replied: number; dismissed: number };
   replies: { total: number; draft: number; scheduled: number; posted: number; failed: number };
   subredditCount: number;
   recentPosts: PostSummary[];
   topPosts: TopPost[];
+  trendingPosts: TrendingPost[];
 }
 
 type RankingFactor = "keywords" | "upvotes" | "comments" | "freshness" | "discussion";
@@ -416,6 +430,52 @@ export default function DashboardPage() {
                 <ArrowRight className="h-3 w-3 ml-2" />
               </Button>
             </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Trending — popular posts outside keyword scope */}
+      {stats.trendingPosts && stats.trendingPosts.length > 0 && (
+        <Card className="mb-6 border-purple-200 bg-purple-50/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-purple-500" />
+              Trending in Your Subreddits
+            </CardTitle>
+            <p className="text-xs text-gray-500">
+              Popular threads you could join — high visibility even outside your keyword scope
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {stats.trendingPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white border border-purple-100 hover:border-purple-300 transition-colors"
+                >
+                  <div className="text-center shrink-0 w-14">
+                    <p className="text-sm font-bold text-purple-600">{post.score >= 1000 ? `${(post.score / 1000).toFixed(1)}k` : post.score}</p>
+                    <p className="text-[10px] text-gray-400">upvotes</p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <a
+                      href={post.permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-gray-900 hover:text-purple-600 flex items-center gap-1"
+                    >
+                      <span className="truncate">{post.title}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </a>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="secondary" className="text-[10px]">r/{post.subreddit}</Badge>
+                      <span className="text-[10px] text-gray-400">{post.numComments} comments</span>
+                      <span className="text-[10px] text-gray-400">{formatRelativeTime(new Date(post.createdUtc))}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
