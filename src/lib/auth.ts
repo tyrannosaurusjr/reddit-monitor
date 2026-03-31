@@ -56,7 +56,7 @@ export const authOptions: NextAuthOptions = {
           // Find or create DB user on initial sign in
           let dbUser = await prisma.user.findUnique({
             where: { email: user.email },
-            select: { id: true, plan: true },
+            select: { id: true, plan: true, isAdmin: true },
           });
 
           if (!dbUser) {
@@ -66,17 +66,18 @@ export const authOptions: NextAuthOptions = {
                 name: user.name || null,
                 image: user.image || null,
               },
-              select: { id: true, plan: true },
+              select: { id: true, plan: true, isAdmin: true },
             });
           }
 
           token.userId = dbUser.id;
           token.plan = dbUser.plan;
+          token.isAdmin = dbUser.isAdmin;
         } catch (error) {
           console.error("[Auth] JWT user lookup failed:", error);
-          // Use email as fallback ID so session still works
           token.userId = user.email;
           token.plan = "free";
+          token.isAdmin = false;
         }
       }
       return token;
@@ -85,6 +86,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.userId) {
         session.user.id = token.userId as string;
         session.user.plan = (token.plan as string) || "free";
+        session.user.isAdmin = (token.isAdmin as boolean) || false;
       }
       return session;
     },
