@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Zap,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 
 interface PostSummary {
@@ -94,16 +95,18 @@ export default function DashboardPage() {
   const { activeProject, loading: projectLoading } = useProject();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeFactors, setActiveFactors] = useState<Set<RankingFactor>>(
     new Set<RankingFactor>(["keywords", "upvotes", "comments", "freshness"])
   );
 
-  useEffect(() => {
+  const fetchStats = (showSpinner = true) => {
     if (!activeProject) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (showSpinner) setLoading(true);
+    else setRefreshing(true);
     fetch(`/api/stats?projectId=${activeProject.id}`)
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status}`);
@@ -111,8 +114,10 @@ export default function DashboardPage() {
       })
       .then(setStats)
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [activeProject]);
+      .finally(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  useEffect(() => { fetchStats(); }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleFactor = (factor: RankingFactor) => {
     setActiveFactors((prev) => {
@@ -168,16 +173,27 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Overview of Reddit outreach for{" "}
-          {activeProject.siteUrl ? (
-            <span className="font-medium">{activeProject.siteUrl}</span>
-          ) : (
-            <span className="font-medium">{activeProject.name}</span>
-          )}
-        </p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+          <p className="text-gray-500 text-sm mt-1">
+            Overview of Reddit outreach for{" "}
+            {activeProject.siteUrl ? (
+              <span className="font-medium">{activeProject.siteUrl}</span>
+            ) : (
+              <span className="font-medium">{activeProject.name}</span>
+            )}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchStats(false)}
+          disabled={refreshing}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
