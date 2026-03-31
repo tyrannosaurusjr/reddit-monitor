@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Sparkles,
 } from "lucide-react";
 
 interface PostSummary {
@@ -117,6 +118,7 @@ export default function DashboardPage() {
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [generating, setGenerating] = useState<string | null>(null);
   const [activeFactors, setActiveFactors] = useState<Set<RankingFactor>>(
     new Set<RankingFactor>(["keywords", "upvotes", "comments", "freshness"])
   );
@@ -172,6 +174,27 @@ export default function DashboardPage() {
       body: JSON.stringify({ id: postId, status: "dismissed" }),
     });
     fetchStats(false);
+  };
+
+  const generateReply = async (postId: string) => {
+    if (!activeProject) return;
+    setGenerating(postId);
+    try {
+      const res = await fetch("/api/generate-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, projectId: activeProject.id }),
+      });
+      if (!res.ok) throw new Error("Generation failed");
+      const { reply } = await res.json();
+      setReplyContent((prev) => ({ ...prev, [postId]: reply }));
+      // Auto-expand the post if not already
+      setExpandedPost(postId);
+    } catch (e) {
+      console.error("Generate error:", e);
+    } finally {
+      setGenerating(null);
+    }
   };
 
   const toggleFactor = (factor: RankingFactor) => {
@@ -379,10 +402,25 @@ export default function DashboardPage() {
                             {post.selftext}
                           </div>
                         )}
+                        <div className="flex items-center gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                            onClick={() => generateReply(post.id)}
+                            disabled={generating === post.id}
+                          >
+                            <Sparkles className={`h-3 w-3 mr-1.5 ${generating === post.id ? "animate-pulse" : ""}`} />
+                            {generating === post.id ? "Generating..." : "AI Draft"}
+                          </Button>
+                          {generating === post.id && (
+                            <span className="text-xs text-gray-400">Writing a contextual reply...</span>
+                          )}
+                        </div>
                         <Textarea
                           placeholder={`Draft your reply... Be helpful and authentic. Reference ${activeProject?.siteUrl || activeProject?.name || "your site"} naturally.`}
-                          className="mt-3"
-                          rows={4}
+                          className="mt-2"
+                          rows={6}
                           value={replyContent[post.id] || ""}
                           onChange={(e) =>
                             setReplyContent((prev) => ({ ...prev, [post.id]: e.target.value }))
