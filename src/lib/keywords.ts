@@ -74,6 +74,40 @@ const CO_OCCURRENCE_RULES: CoOccurrenceRule[] = [
       "criminal record", "on record", "recorded delivery",
     ],
   },
+  // Outdoor/camping context
+  {
+    keyword: "trail",
+    boost: [
+      "hike", "hiking", "trek", "trekking", "walk", "walking",
+      "summit", "mountain", "camp", "camping", "backpack",
+    ],
+    reject: [
+      "paper trail", "audit trail", "trail mix", "trail period",
+      "free trial",
+    ],
+  },
+  {
+    keyword: "summit",
+    boost: [
+      "hike", "climb", "mountain", "peak", "trail", "altitude",
+      "camp", "tent", "trek", "ridge",
+    ],
+    reject: [
+      "summit meeting", "summit conference", "g7 summit", "g20 summit",
+      "business summit", "tech summit",
+    ],
+  },
+  {
+    keyword: "camp",
+    boost: [
+      "tent", "hike", "fire", "campfire", "sleeping bag", "campsite",
+      "campground", "outdoor", "trail", "backpack", "nature",
+    ],
+    reject: [
+      "boot camp", "training camp", "camp out", "concentration camp",
+      "refugee camp", "band camp", "summer camp", "day camp",
+    ],
+  },
 ];
 
 // Build a lookup map for fast access
