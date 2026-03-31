@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatRelativeTime } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import { formatRelativeTime, getOptimalPostTime } from "@/lib/utils";
 import { useProject } from "@/lib/project-context";
 import Link from "next/link";
 import {
@@ -18,6 +19,9 @@ import {
   Zap,
   ArrowRight,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 
 interface PostSummary {
@@ -96,6 +100,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState<string | null>(null);
   const [activeFactors, setActiveFactors] = useState<Set<RankingFactor>>(
     new Set<RankingFactor>(["keywords", "upvotes", "comments", "freshness"])
   );
@@ -118,6 +125,40 @@ export default function DashboardPage() {
   };
 
   useEffect(() => { fetchStats(); }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveReply = async (postId: string, schedule: boolean) => {
+    const content = replyContent[postId];
+    if (!content?.trim() || !activeProject) return;
+    setSubmitting(postId);
+    try {
+      await fetch("/api/replies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId,
+          projectId: activeProject.id,
+          content,
+          scheduledFor: schedule ? getOptimalPostTime().toISOString() : undefined,
+        }),
+      });
+      setReplyContent((prev) => ({ ...prev, [postId]: "" }));
+      setExpandedPost(null);
+      fetchStats(false);
+    } catch (e) {
+      console.error("Failed to save reply:", e);
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const dismissPost = async (postId: string) => {
+    await fetch("/api/posts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: postId, status: "dismissed" }),
+    });
+    fetchStats(false);
+  };
 
   const toggleFactor = (factor: RankingFactor) => {
     setActiveFactors((prev) => {
@@ -247,61 +288,127 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {rankedPosts.map((post, i) => (
-                <div
-                  key={post.id}
-                  className="flex items-start gap-3 p-4 rounded-lg bg-white border border-orange-100 hover:border-orange-300 transition-colors"
-                >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-600 font-bold text-sm shrink-0 mt-0.5">
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <a
-                      href={post.permalink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-gray-900 hover:text-orange-600 flex items-center gap-1"
-                    >
-                      {post.title}
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge variant="secondary" className="text-xs">r/{post.subreddit}</Badge>
-                      <span className="text-xs text-gray-400">by u/{post.author}</span>
-                      <span className="text-xs text-gray-400">
-                        {post.score} pts | {post.numComments} comments
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {formatRelativeTime(new Date(post.createdUtc))}
-                      </span>
+              {rankedPosts.map((post, i) => {
+                const isExpanded = expandedPost === post.id;
+                return (
+                  <div
+                    key={post.id}
+                    className="rounded-lg bg-white border border-orange-100 hover:border-orange-300 transition-colors overflow-hidden"
+                  >
+                    <div className="flex items-start gap-3 p-4">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-600 font-bold text-sm shrink-0 mt-0.5">
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {post.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge variant="secondary" className="text-xs">r/{post.subreddit}</Badge>
+                          <span className="text-xs text-gray-400">by u/{post.author}</span>
+                          <span className="text-xs text-gray-400">
+                            {post.score} pts | {post.numComments} comments
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {formatRelativeTime(new Date(post.createdUtc))}
+                          </span>
+                        </div>
+                        {!isExpanded && post.selftext && (
+                          <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">
+                            {post.selftext.slice(0, 200)}{post.selftext.length > 200 ? "..." : ""}
+                          </p>
+                        )}
+                        {post.matchedKeywords && (
+                          <div className="flex gap-1 mt-1.5 flex-wrap">
+                            {post.matchedKeywords.split(",").map((kw) => (
+                              <Badge key={kw} variant="outline" className="text-[10px] border-orange-200 text-orange-700">
+                                {kw}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge className="bg-orange-500 text-white text-xs">
+                          {post.compositeScore}
+                        </Badge>
+                        <a
+                          href={post.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                          title="View on Reddit"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        <button
+                          onClick={() => setExpandedPost(isExpanded ? null : post.id)}
+                          className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                          title={isExpanded ? "Collapse" : "Draft reply"}
+                        >
+                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => dismissPost(post.id)}
+                          className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"
+                          title="Dismiss"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    {post.selftext && (
-                      <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">
-                        {post.selftext.slice(0, 200)}{post.selftext.length > 200 ? "..." : ""}
-                      </p>
-                    )}
-                    {post.matchedKeywords && (
-                      <div className="flex gap-1 mt-1.5 flex-wrap">
-                        {post.matchedKeywords.split(",").map((kw) => (
-                          <Badge key={kw} variant="outline" className="text-[10px] border-orange-200 text-orange-700">
-                            {kw}
-                          </Badge>
-                        ))}
+
+                    {isExpanded && (
+                      <div className="px-4 pb-4 border-t border-orange-50">
+                        {post.selftext && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg text-xs text-gray-700 max-h-40 overflow-y-auto">
+                            {post.selftext}
+                          </div>
+                        )}
+                        <Textarea
+                          placeholder={`Draft your reply... Be helpful and authentic. Reference ${activeProject?.siteUrl || activeProject?.name || "your site"} naturally.`}
+                          className="mt-3"
+                          rows={4}
+                          value={replyContent[post.id] || ""}
+                          onChange={(e) =>
+                            setReplyContent((prev) => ({ ...prev, [post.id]: e.target.value }))
+                          }
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => saveReply(post.id, false)}
+                            disabled={submitting === post.id || !replyContent[post.id]?.trim()}
+                          >
+                            <Send className="h-3 w-3 mr-1.5" />
+                            Save Draft
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => saveReply(post.id, true)}
+                            disabled={submitting === post.id || !replyContent[post.id]?.trim()}
+                          >
+                            <Clock className="h-3 w-3 mr-1.5" />
+                            Schedule (Staggered)
+                          </Button>
+                          <a
+                            href={post.permalink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-auto"
+                          >
+                            <Button size="sm" variant="ghost">
+                              <ExternalLink className="h-3 w-3 mr-1.5" />
+                              Reddit
+                            </Button>
+                          </a>
+                        </div>
                       </div>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
-                    <Badge className="bg-orange-500 text-white text-xs">
-                      {post.compositeScore}
-                    </Badge>
-                    <div className="text-[10px] text-gray-400 mt-1 space-y-0.5">
-                      {activeFactors.has("keywords") && <div>kw: {post.relevanceScore}</div>}
-                      {activeFactors.has("upvotes") && <div>up: {post.score}</div>}
-                      {activeFactors.has("comments") && <div>cm: {post.numComments}</div>}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <Link href="/queue">
               <Button variant="outline" size="sm" className="mt-4 w-full">
