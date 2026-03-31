@@ -13,8 +13,10 @@ const prisma = new PrismaClient({ adapter });
 
 const REDDIT_PUBLIC_URL = "https://www.reddit.com";
 
-async function fetchRedditPosts(subreddit: string, sort: string, limit: number) {
-  const url = `${REDDIT_PUBLIC_URL}/r/${subreddit}/${sort}.json?limit=${limit}`;
+// time: "hour", "day", "week", "month", "year", "all" (only applies to "top" sort)
+async function fetchRedditPosts(subreddit: string, sort: string, limit: number, time?: string) {
+  let url = `${REDDIT_PUBLIC_URL}/r/${subreddit}/${sort}.json?limit=${limit}`;
+  if (time && sort === "top") url += `&t=${time}`;
   const res = await fetch(url, {
     headers: { "User-Agent": "RedditReach/1.0.0" },
   });
@@ -129,11 +131,38 @@ async function main() {
 
     let projectFound = 0;
 
+    // Scan period: default is "new" only, but CLI arg can override
+    // Usage: npx tsx scripts/local-scan.ts --period=week
+    const periodArg = process.argv.find(a => a.startsWith("--period="));
+    const period = periodArg ? periodArg.split("=")[1] : null;
+
+    // Determine which sorts to fetch
+    const sorts: Array<{ sort: string; limit: number; time?: string }> = [
+      { sort: "new", limit: 25 }, // always check newest
+    ];
+    if (period) {
+      // Also search top posts from the specified period
+      sorts.push({ sort: "top", limit: 25, time: period });
+    }
+
     for (const sub of project.subreddits) {
       try {
-        const posts = await fetchRedditPosts(sub.name, "new", 25);
+        const allPosts: any[] = [];
+        for (const s of sorts) {
+          const fetched = await fetchRedditPosts(sub.name, s.sort, s.limit, s.time);
+          allPosts.push(...fetched);
+          await new Promise(r => setTimeout(r, 500));
+        }
 
-        for (const post of posts) {
+        // Deduplicate by reddit ID
+        const seen = new Set<string>();
+        const posts = allPosts.filter((p: any) => {
+          if (seen.has(p.name)) return false;
+          seen.add(p.name);
+          return true;
+        });
+
+        for (const post of posts as any[]) {
           const existing = await prisma.monitoredPost.findUnique({
             where: { redditId_projectId: { redditId: post.name, projectId: project.id } },
           });
