@@ -29,13 +29,13 @@ export function getOptimalPostTime(): Date {
 
   // If it's already past optimal time today, schedule for tomorrow
   if (target <= now) {
-    target.setDate(target.getDate() + 1);
+    target.setUTCDate(target.getUTCDate() + 1);
   }
 
-  // Skip weekends
-  const day = target.getDay();
-  if (day === 0) target.setDate(target.getDate() + 1); // Sunday -> Monday
-  if (day === 6) target.setDate(target.getDate() + 2); // Saturday -> Monday
+  // Skip weekends (use UTC to match the UTC-based scheduling)
+  const day = target.getUTCDay();
+  if (day === 0) target.setUTCDate(target.getUTCDate() + 1); // Sunday -> Monday
+  if (day === 6) target.setUTCDate(target.getUTCDate() + 2); // Saturday -> Monday
 
   return target;
 }
