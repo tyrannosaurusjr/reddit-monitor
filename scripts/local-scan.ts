@@ -153,7 +153,7 @@ async function main() {
         for (const s of sorts) {
           const fetched = await fetchRedditPosts(sub.name, s.sort, s.limit, s.time);
           allPosts.push(...fetched);
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 3000));
         }
 
         // Deduplicate by reddit ID
@@ -198,7 +198,7 @@ async function main() {
         }
 
         // Small delay to avoid Reddit rate limiting
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 3000));
       } catch (err) {
         console.error(`  Error scanning r/${sub.name}:`, (err as Error).message);
       }
@@ -247,7 +247,7 @@ async function main() {
           trendingFound++;
         }
 
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 3000));
       } catch (err) {
         // Silently skip trending errors
       }
