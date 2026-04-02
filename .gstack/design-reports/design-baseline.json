@@ -1,0 +1,30 @@
+{
+  "date": "2026-04-02",
+  "url": "https://reddit-monitor-orpin.vercel.app",
+  "designScore": "B-",
+  "aiSlopScore": "B",
+  "categoryGrades": {
+    "hierarchy": "B",
+    "typography": "B",
+    "spacing": "B",
+    "color": "B",
+    "interaction": "C",
+    "responsive": "C",
+    "content": "B-",
+    "aiSlop": "B",
+    "motion": "D",
+    "performance": "B-"
+  },
+  "findings": [
+    { "id": "FINDING-001", "title": "Sidebar doesn't collapse on mobile/tablet", "impact": "high", "category": "responsive", "status": "fixed" },
+    { "id": "FINDING-002", "title": "Analytics page infinite loading spinner", "impact": "high", "category": "performance", "status": "deferred" },
+    { "id": "FINDING-003", "title": "Touch targets undersized across app", "impact": "medium", "category": "accessibility", "status": "fixed" },
+    { "id": "FINDING-004", "title": "No skeleton loading states", "impact": "medium", "category": "performance", "status": "fixed" },
+    { "id": "FINDING-005", "title": "Default system font stack (Geist not wired)", "impact": "medium", "category": "typography", "status": "fixed" },
+    { "id": "FINDING-006", "title": "Inconsistent tab/filter patterns", "impact": "medium", "category": "consistency", "status": "deferred" },
+    { "id": "FINDING-007", "title": "Empty states lack warmth", "impact": "medium", "category": "content", "status": "fixed" },
+    { "id": "FINDING-008", "title": "Flat heading scale", "impact": "low", "category": "typography", "status": "deferred" },
+    { "id": "FINDING-009", "title": "Login page bare minimum", "impact": "low", "category": "content", "status": "fixed" },
+    { "id": "FINDING-010", "title": "Stat card grid reads as template", "impact": "low", "category": "aiSlop", "status": "deferred" }
+  ]
+}
