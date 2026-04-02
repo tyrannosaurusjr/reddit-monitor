@@ -92,7 +92,7 @@ export function Nav() {
           <div className="relative">
             <button
               onClick={() => setShowSwitcher(!showSwitcher)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px]"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <div
@@ -146,7 +146,7 @@ export function Nav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors min-h-[44px]",
                 isActive
                   ? "bg-orange-50 text-orange-700"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
@@ -161,7 +161,7 @@ export function Nav() {
           <Link
             href="/admin"
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors mt-2 border-t border-gray-100 pt-3",
+              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors mt-2 border-t border-gray-100 pt-3 min-h-[44px]",
               pathname === "/admin"
                 ? "bg-orange-50 text-orange-700"
                 : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
