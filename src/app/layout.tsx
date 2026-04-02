@@ -39,7 +39,7 @@ export default function RootLayout({
             <div className="flex min-h-screen">
               <Nav />
               <main className="flex-1 overflow-auto">
-                <div className="p-8">{children}</div>
+                <div className="p-4 pt-16 md:p-8 md:pt-8">{children}</div>
               </main>
             </div>
           </ProjectProvider>

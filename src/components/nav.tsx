@@ -15,8 +15,10 @@ import {
   ChevronDown,
   LogOut,
   Shield,
+  Menu,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -32,6 +34,12 @@ export function Nav() {
   const { data: session } = useSession();
   const { projects, activeProject, setActiveProject } = useProject();
   const [showSwitcher, setShowSwitcher] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile nav on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   // Don't show nav on login page
   if (pathname === "/login") return null;
@@ -40,7 +48,37 @@ export function Nav() {
   if (!session?.user) return null;
 
   return (
-    <nav className="flex flex-col w-64 border-r border-gray-200 bg-white min-h-screen">
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed top-4 left-4 z-40 md:hidden p-2 rounded-lg bg-white border border-gray-200 shadow-sm"
+        aria-label="Open navigation menu"
+      >
+        <Menu className="h-5 w-5 text-gray-700" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+    <nav className={cn(
+      "flex flex-col w-64 border-r border-gray-200 bg-white min-h-screen",
+      "fixed z-50 transition-transform duration-200 ease-out md:relative md:translate-x-0",
+      mobileOpen ? "translate-x-0" : "-translate-x-full"
+    )}>
+      {/* Mobile close button */}
+      <button
+        onClick={() => setMobileOpen(false)}
+        className="absolute top-4 right-4 p-1 rounded-md text-gray-400 hover:text-gray-600 md:hidden"
+        aria-label="Close navigation menu"
+      >
+        <X className="h-5 w-5" />
+      </button>
       <div className="p-6">
         <h1 className="text-xl font-bold text-gray-900">
           <span className="text-orange-500">Reddit</span>Reach
@@ -168,5 +206,6 @@ export function Nav() {
         </div>
       </div>
     </nav>
+    </>
   );
 }
