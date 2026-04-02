@@ -202,6 +202,7 @@ export default function QueuePage() {
                       onClick={() =>
                         setExpandedPost(expandedPost === post.id ? null : post.id)
                       }
+                      aria-label={expandedPost === post.id ? "Collapse post" : "Expand post"}
                     >
                       {expandedPost === post.id ? (
                         <ChevronUp className="h-4 w-4" />
@@ -213,7 +214,7 @@ export default function QueuePage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => dismissPost(post.id)}
-                      title="Dismiss"
+                      aria-label="Dismiss post"
                     >
                       <X className="h-4 w-4 text-gray-400" />
                     </Button>

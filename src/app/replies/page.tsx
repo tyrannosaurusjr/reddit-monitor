@@ -231,6 +231,7 @@ export default function RepliesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Edit reply"
                             onClick={() => {
                               setEditingId(reply.id);
                               setEditContent(reply.content);
@@ -242,6 +243,7 @@ export default function RepliesPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              aria-label="Post reply now"
                               onClick={() => postReplyNow(reply.id)}
                             >
                               <Send className="h-3 w-3" />
@@ -250,6 +252,7 @@ export default function RepliesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Delete reply"
                             onClick={() => deleteReply(reply.id)}
                           >
                             <Trash2 className="h-3 w-3 text-red-400" />

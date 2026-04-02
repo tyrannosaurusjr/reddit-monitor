@@ -174,7 +174,7 @@ export default function MonitorPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => toggleSubreddit(sub.id, sub.enabled)}
-                      title={sub.enabled ? "Disable" : "Enable"}
+                      aria-label={sub.enabled ? `Disable r/${sub.name}` : `Enable r/${sub.name}`}
                     >
                       {sub.enabled ? (
                         <Power className="h-4 w-4 text-green-500" />
@@ -186,6 +186,7 @@ export default function MonitorPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => deleteSubreddit(sub.id)}
+                      aria-label={`Delete r/${sub.name}`}
                     >
                       <Trash2 className="h-4 w-4 text-red-400" />
                     </Button>
