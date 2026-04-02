@@ -79,6 +79,21 @@ export const authOptions: NextAuthOptions = {
           token.plan = "free";
           token.isAdmin = false;
         }
+      } else if (token.userId) {
+        // Re-fetch plan and isAdmin on every JWT refresh so changes take effect
+        // without requiring sign-out. One DB query per session refresh (~30s idle).
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.userId as string },
+            select: { plan: true, isAdmin: true },
+          });
+          if (dbUser) {
+            token.plan = dbUser.plan;
+            token.isAdmin = dbUser.isAdmin;
+          }
+        } catch {
+          // Non-blocking — keep existing token values on failure
+        }
       }
       return token;
     },
