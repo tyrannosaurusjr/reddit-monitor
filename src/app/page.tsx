@@ -222,8 +222,20 @@ export default function DashboardPage() {
 
   if (projectLoading || loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+      <div className="space-y-6 animate-pulse">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-7 bg-gray-200 rounded w-40 mb-2" />
+            <div className="h-4 bg-gray-100 rounded w-64" />
+          </div>
+          <div className="h-9 bg-gray-200 rounded w-24" />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-24 bg-gray-100 rounded-xl" />
+          ))}
+        </div>
+        <div className="h-64 bg-gray-100 rounded-xl" />
       </div>
     );
   }
