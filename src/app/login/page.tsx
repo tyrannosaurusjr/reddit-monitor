@@ -49,7 +49,7 @@ function LoginForm() {
             <span className="text-orange-500">Reddit</span>Reach
           </CardTitle>
           <p className="text-sm text-gray-500 mt-1">
-            Sign in to manage your outreach projects
+            Monitor subreddits, find relevant threads, and draft targeted replies across multiple projects.
           </p>
           {error && (
             <p className="text-sm text-red-600 mt-2 bg-red-50 rounded-md px-3 py-2">
