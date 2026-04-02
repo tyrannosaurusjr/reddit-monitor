@@ -135,7 +135,20 @@ export default function RepliesPage() {
           ) : replies.length === 0 ? (
             <Card className="mt-4">
               <CardContent className="p-12 text-center">
-                <p className="text-gray-500">No {tab} replies.</p>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                    <Send className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-gray-700 font-medium">No {tab} replies yet</p>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {tab === "draft" && "Head to the Queue to draft replies to relevant posts."}
+                      {tab === "scheduled" && "Drafts you schedule will appear here."}
+                      {tab === "posted" && "Successfully posted replies show up here."}
+                      {tab === "failed" && "No failed replies. That's a good thing!"}
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ) : (
