@@ -2,6 +2,7 @@
 // Usage: npx tsx scripts/local-scan.ts
 
 import "dotenv/config";
+import dns from "dns/promises";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 
@@ -100,7 +101,21 @@ function calculateRelevance(
   return { score, matched };
 }
 
+async function isOnline(): Promise<boolean> {
+  try {
+    await dns.lookup("reddit.com");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
+  if (!(await isOnline())) {
+    console.log(`[${new Date().toISOString()}] Network unavailable, skipping scan`);
+    process.exit(0);
+  }
+
   console.log(`[${new Date().toISOString()}] Starting local scan...`);
 
   const projects = await prisma.project.findMany({
