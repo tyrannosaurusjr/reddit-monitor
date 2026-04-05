@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     let totalScanned = 0;
     let totalFound = 0;
     let crosspostsFound = 0;
+    const errors: string[] = [];
 
     for (const project of projects) {
       if (project.subreddits.length === 0) continue;
@@ -69,7 +70,9 @@ export async function POST(req: NextRequest) {
             totalFound++;
           }
         } catch (err) {
-          console.error(`Error scanning r/${sub.name} for ${project.name}:`, err);
+          const msg = `r/${sub.name}: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`Error scanning ${msg} for ${project.name}`);
+          errors.push(msg);
         }
       }
     }
@@ -79,6 +82,7 @@ export async function POST(req: NextRequest) {
       scanned: totalScanned,
       found: totalFound,
       crossposts: crosspostsFound,
+      ...(errors.length > 0 && { errors, warning: `${errors.length} subreddit(s) failed — Reddit may be blocking requests from this server's IP. Run scans locally with: bun run scan` }),
     });
   } catch (error) {
     console.error("Scan error:", error);
