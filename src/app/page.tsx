@@ -119,6 +119,7 @@ export default function DashboardPage() {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [activeFactors, setActiveFactors] = useState<Set<RankingFactor>>(
     new Set<RankingFactor>(["keywords", "upvotes", "comments", "freshness"])
   );
@@ -179,19 +180,22 @@ export default function DashboardPage() {
   const generateReply = async (postId: string) => {
     if (!activeProject) return;
     setGenerating(postId);
+    setGenerateError(null);
     try {
       const res = await fetch("/api/generate-reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ postId, projectId: activeProject.id }),
       });
-      if (!res.ok) throw new Error("Generation failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed (${res.status})`);
+      }
       const { reply } = await res.json();
       setReplyContent((prev) => ({ ...prev, [postId]: reply }));
-      // Auto-expand the post if not already
       setExpandedPost(postId);
     } catch (e) {
-      console.error("Generate error:", e);
+      setGenerateError(e instanceof Error ? e.message : "Generation failed");
     } finally {
       setGenerating(null);
     }
@@ -427,6 +431,9 @@ export default function DashboardPage() {
                           </Button>
                           {generating === post.id && (
                             <span className="text-xs text-gray-400">Writing a contextual reply...</span>
+                          )}
+                          {generateError && generating !== post.id && (
+                            <span className="text-xs text-red-500">{generateError}</span>
                           )}
                         </div>
                         <Textarea

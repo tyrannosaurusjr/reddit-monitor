@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Copy,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 
 interface Post {
@@ -54,6 +55,8 @@ export default function QueuePage() {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<"new" | "queued" | "all">("new");
   const [crosspostGroups, setCrosspostGroups] = useState<Record<string, CrosspostGroup[]>>({});
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const fetchPosts = useCallback(() => {
     if (!activeProject) return;
@@ -85,6 +88,30 @@ export default function QueuePage() {
       body: JSON.stringify({ id, status: "dismissed" }),
     });
     fetchPosts();
+  };
+
+  const generateReply = async (postId: string) => {
+    if (!activeProject) return;
+    setGenerating(postId);
+    setGenerateError(null);
+    try {
+      const res = await fetch("/api/generate-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, projectId: activeProject.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed (${res.status})`);
+      }
+      const { reply } = await res.json();
+      setReplyContent((prev) => ({ ...prev, [postId]: reply }));
+      setExpandedPost(postId);
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setGenerating(null);
+    }
   };
 
   const saveReply = async (postId: string, schedule: boolean) => {
@@ -262,6 +289,24 @@ export default function QueuePage() {
                         {post.selftext}
                       </div>
                     )}
+                    <div className="flex items-center gap-2 mb-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                        onClick={() => generateReply(post.id)}
+                        disabled={generating === post.id}
+                      >
+                        <Sparkles className={`h-3 w-3 mr-1.5 ${generating === post.id ? "animate-pulse" : ""}`} />
+                        {generating === post.id ? "Generating..." : "AI Draft"}
+                      </Button>
+                      {generating === post.id && (
+                        <span className="text-xs text-gray-400">Writing a contextual reply...</span>
+                      )}
+                      {generateError && generating !== post.id && (
+                        <span className="text-xs text-red-500">{generateError}</span>
+                      )}
+                    </div>
                     <Textarea
                       placeholder={`Write your reply... Be helpful and authentic. Naturally reference ${activeProject.siteUrl || activeProject.name} where relevant.`}
                       className="mb-3"
