@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateRequest();
@@ -31,14 +29,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_tokens: 500,
-      temperature: 0.8,
-      messages: [
-        {
-          role: "system",
-          content: `You are a helpful Reddit commenter who represents ${project.name}${project.siteUrl ? ` (${project.siteUrl})` : ""}. ${project.description ? `Context: ${project.description}.` : ""}
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: `You are a helpful Reddit commenter who represents ${project.name}${project.siteUrl ? ` (${project.siteUrl})` : ""}. ${project.description ? `Context: ${project.description}.` : ""}
 
 Your job is to write a genuinely helpful reply to a Reddit post. Rules:
 - Be authentic and conversational — sound like a real person, not a marketer
@@ -51,23 +44,21 @@ Your job is to write a genuinely helpful reply to a Reddit post. Rules:
 - Never use phrases like "check out our site" or "visit us at" — if you reference the site, weave it in naturally like "I put together a guide on this at..." or "there's some good info about this on..."
 - Do NOT use emojis
 - Do NOT start with "Hey!" or "Great question!"`,
-        },
-        {
-          role: "user",
-          content: `Subreddit: r/${post.subreddit}
+    });
+
+    const result = await model.generateContent(
+      `Subreddit: r/${post.subreddit}
 Title: ${post.title}
 Post: ${post.selftext?.slice(0, 2000) || "(no body text)"}
 
-Write a helpful reply:`,
-        },
-      ],
-    });
+Write a helpful reply:`
+    );
 
-    const reply = completion.choices[0]?.message?.content || "";
+    const reply = result.response.text();
 
     return NextResponse.json({ reply });
   } catch (error) {
-    console.error("OpenAI error:", error);
+    console.error("Gemini error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Generation failed" },
       { status: 500 }
