@@ -21,6 +21,7 @@ vi.mock("@/lib/prisma", () => ({
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 const jwtCallback = authOptions.callbacks!.jwt! as Function;
 
 describe("auth JWT callback — isAdmin/plan refresh", () => {
@@ -33,7 +34,8 @@ describe("auth JWT callback — isAdmin/plan refresh", () => {
       id: "user-1",
       plan: "pro",
       isAdmin: true,
-    } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} as any);
 
     const token = await jwtCallback({
       token: {},
@@ -53,7 +55,8 @@ describe("auth JWT callback — isAdmin/plan refresh", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       plan: "pro",
       isAdmin: true,
-    } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} as any);
 
     const token = await jwtCallback({
       token: staleToken,
