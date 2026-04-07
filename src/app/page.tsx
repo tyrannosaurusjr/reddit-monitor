@@ -185,13 +185,17 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ postId, projectId: activeProject.id }),
       });
-      if (!res.ok) throw new Error("Generation failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Generation failed");
+      }
       const { reply } = await res.json();
       setReplyContent((prev) => ({ ...prev, [postId]: reply }));
       // Auto-expand the post if not already
       setExpandedPost(postId);
     } catch (e) {
       console.error("Generate error:", e);
+      alert(e instanceof Error ? e.message : "Generation failed");
     } finally {
       setGenerating(null);
     }

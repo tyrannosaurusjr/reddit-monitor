@@ -3,11 +3,15 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: NextRequest) {
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      { error: "AI reply generation is not configured. Set OPENAI_API_KEY to enable this feature." },
+      { status: 503 }
+    );
+  }
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const auth = await authenticateRequest();
   if ("error" in auth) return auth.error;
 
