@@ -25,6 +25,7 @@ export default function SettingsPage() {
   // New project form
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProject, setNewProject] = useState({ name: "", slug: "", siteUrl: "", color: "#f97316" });
+  const [newProjectError, setNewProjectError] = useState("");
 
   const fetchKeywords = () => {
     if (!activeProject) return;
@@ -74,7 +75,9 @@ export default function SettingsPage() {
   };
 
   const createProject = async () => {
-    if (!newProject.name || !newProject.slug) return;
+    if (!newProject.name) { setNewProjectError("Name is required."); return; }
+    if (!newProject.slug) { setNewProjectError("Slug is required."); return; }
+    setNewProjectError("");
     const res = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -84,6 +87,9 @@ export default function SettingsPage() {
       setNewProject({ name: "", slug: "", siteUrl: "", color: "#f97316" });
       setShowNewProject(false);
       refreshProjects();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setNewProjectError(body.error || "Failed to create project.");
     }
   };
 
@@ -167,9 +173,12 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+                {newProjectError && (
+                  <p className="text-sm text-red-600">{newProjectError}</p>
+                )}
                 <div className="flex gap-2">
                   <Button size="sm" onClick={createProject}>Create Project</Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowNewProject(false)}>Cancel</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setShowNewProject(false); setNewProjectError(""); }}>Cancel</Button>
                 </div>
               </div>
             )}
