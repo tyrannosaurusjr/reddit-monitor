@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchSubredditPosts } from "@/lib/reddit";
-import { getKeywordsForProject, calculateRelevance } from "@/lib/keywords";
+import { getKeywordsForProject, calculateRelevance, MIN_RELEVANCE_SCORE } from "@/lib/keywords";
 import { detectCrosspost, RedditPostWithCrosspost } from "@/lib/crosspost";
 
 export async function POST(req: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
             if (existing) continue;
 
             const { score, matched } = calculateRelevance(post.title, post.selftext, keywords, sub.name);
-            if (score === 0) continue;
+            if (score < MIN_RELEVANCE_SCORE) continue;
 
             const crosspostInfo = await detectCrosspost(post as RedditPostWithCrosspost);
             if (crosspostInfo.isCrosspost) crosspostsFound++;

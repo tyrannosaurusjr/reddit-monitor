@@ -59,6 +59,32 @@ function checkCoOccurrence(text: string, keyword: string): "boost" | "reject" | 
   return "neutral";
 }
 
+// Intent signals — phrases that suggest the poster is seeking help/recommendations
+const INTENT_BOOST_PATTERNS = [
+  /\?/,
+  /\b(?:looking for|searching for|trying to find)\b/,
+  /\b(?:recommend|recommendation|recommendations|suggest|suggestion|suggestions)\b/,
+  /\b(?:need help|need advice|any tips|any advice)\b/,
+  /\b(?:where can i|where should i|how do i|how can i|what should i)\b/,
+  /\b(?:first time|beginner|new to)\b/,
+  /\b(?:planning a trip|planning to visit|want to visit|visiting)\b/,
+  /\b(?:anyone know|does anyone|has anyone)\b/,
+  /\b(?:help me|advice needed|tips for|guide to)\b/,
+];
+
+function calculateIntentBoost(text: string): number {
+  let boost = 0;
+  for (const pattern of INTENT_BOOST_PATTERNS) {
+    if (pattern.test(text)) {
+      boost += 10;
+      if (boost >= 20) break;
+    }
+  }
+  return boost;
+}
+
+const MIN_RELEVANCE_SCORE = 20;
+
 function calculateRelevance(
   title: string, selftext: string,
   keywords: { global: string[]; contextual: string[]; contextualSubs: Set<string> },
@@ -83,19 +109,31 @@ function calculateRelevance(
     }
   }
 
+  // Contextual keywords: require 2+ matches (single contextual keyword is too noisy)
   if (keywords.contextualSubs.has(subreddit.toLowerCase())) {
+    const contextualMatches: Array<{ keyword: string; score: number }> = [];
     for (const kw of keywords.contextual) {
       if (matchesWholeWord(text, kw) && !matched.includes(kw)) {
         const co = checkCoOccurrence(text, kw);
         if (co === "reject") continue;
-        matched.push(kw);
-        score += co === "boost" ? 25 : 15;
+        contextualMatches.push({ keyword: kw, score: co === "boost" ? 25 : 15 });
+      }
+    }
+    if (contextualMatches.length >= 2 || contextualMatches.some(m => m.score >= 25)) {
+      for (const m of contextualMatches) {
+        matched.push(m.keyword);
+        score += m.score;
       }
     }
   }
 
   for (const kw of matched) {
     if (matchesWholeWord(titleLower, kw)) score += 15;
+  }
+
+  // Intent boost — reward posts where the user is asking for help/recommendations
+  if (matched.length > 0) {
+    score += calculateIntentBoost(text);
   }
 
   return { score, matched };
@@ -188,7 +226,7 @@ async function main() {
           const { score, matched } = calculateRelevance(
             post.title, post.selftext || "", keywords, sub.name
           );
-          if (score === 0) continue;
+          if (score < MIN_RELEVANCE_SCORE) continue;
 
           await prisma.monitoredPost.create({
             data: {
@@ -222,23 +260,28 @@ async function main() {
     totalFound += projectFound;
     console.log(`  ${project.name}: scanned ${project.subreddits.length} subs, found ${projectFound} new posts`);
 
-    // --- Trending: grab hottest posts from each subreddit regardless of keywords ---
+    // --- Trending: grab hottest posts that are also topic-relevant ---
     let trendingFound = 0;
-    const MIN_TRENDING_SCORE = 50; // Reddit upvotes threshold
+    const MIN_TRENDING_UPVOTES = 50;
+    const MIN_TRENDING_RELEVANCE = 10; // lower bar than keyword-matched, but must have SOME relevance
 
     for (const sub of project.subreddits) {
       try {
         const hotPosts = await fetchRedditPosts(sub.name, "hot", 10);
 
         for (const post of hotPosts) {
-          // Only high-engagement posts
-          if (post.score < MIN_TRENDING_SCORE) continue;
+          if (post.score < MIN_TRENDING_UPVOTES) continue;
 
           const existing = await prisma.monitoredPost.findUnique({
             where: { redditId_projectId: { redditId: post.name, projectId: project.id } },
           });
-          // If it already exists as a keyword-matched post, skip (don't overwrite)
           if (existing) continue;
+
+          // Trending posts must have at least some keyword relevance
+          const { score: relScore, matched: relMatched } = calculateRelevance(
+            post.title, post.selftext || "", keywords, sub.name
+          );
+          if (relScore < MIN_TRENDING_RELEVANCE) continue;
 
           await prisma.monitoredPost.create({
             data: {
@@ -252,8 +295,8 @@ async function main() {
               score: post.score,
               numComments: post.num_comments,
               createdUtc: new Date(post.created_utc * 1000),
-              relevanceScore: 0, // not keyword-matched
-              matchedKeywords: "",
+              relevanceScore: relScore,
+              matchedKeywords: relMatched.join(","),
               projectId: project.id,
               subredditTargetId: sub.id,
               status: "trending",

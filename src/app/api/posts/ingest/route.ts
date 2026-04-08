@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getKeywordsForProject, calculateRelevance } from "@/lib/keywords";
+import { getKeywordsForProject, calculateRelevance, MIN_RELEVANCE_SCORE } from "@/lib/keywords";
 import { detectCrosspost, RedditPostWithCrosspost } from "@/lib/crosspost";
 
 // Secret to authenticate local scan scripts. Set INGEST_SECRET in .env.
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       if (existing) { skipped++; continue; }
 
       const { score, matched } = calculateRelevance(post.title, post.selftext, keywords, subredditName);
-      if (score === 0) { skipped++; continue; }
+      if (score < MIN_RELEVANCE_SCORE) { skipped++; continue; }
 
       const crosspostInfo = await detectCrosspost(post as unknown as RedditPostWithCrosspost);
       if (crosspostInfo.isCrosspost) crosspostsFound++;

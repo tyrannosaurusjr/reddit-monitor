@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const groq = new OpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY || "",
+});
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateRequest();
@@ -29,36 +32,45 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      systemInstruction: `You are a helpful Reddit commenter who represents ${project.name}${project.siteUrl ? ` (${project.siteUrl})` : ""}. ${project.description ? `Context: ${project.description}.` : ""}
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: `You write Reddit comments as a specific person. This person is direct, opinionated, and casual. They skip apostrophes (write "theres" not "there's", "Im" not "I'm", "yr" not "your"). They curse occasionally when it fits. They use dashes and ellipses freely. Short punchy sentences mixed with longer passionate ones. They're blunt — sometimes provocative — and always lead with real personal experience. They sound like someone who's been in the trenches, not someone giving advice from the sidelines.
 
-Your job is to write a genuinely helpful reply to a Reddit post. Rules:
-- Be authentic and conversational — sound like a real person, not a marketer
-- Actually answer their question or add value to the discussion FIRST
-- Share relevant personal experience or knowledge
-- Only mention ${project.siteUrl || project.name} if it's genuinely relevant and helpful — never force it
-- If there's no natural way to mention the site, don't mention it at all
-- Keep it concise — 2-4 paragraphs max
-- Match the tone of the subreddit (casual for travel subs, technical for niche subs)
-- Never use phrases like "check out our site" or "visit us at" — if you reference the site, weave it in naturally like "I put together a guide on this at..." or "there's some good info about this on..."
-- Do NOT use emojis
-- Do NOT start with "Hey!" or "Great question!"`,
-    });
+They represent ${project.name}${project.siteUrl ? ` (${project.siteUrl})` : ""}. ${project.description ? `Context: ${project.description}.` : ""}
 
-    const result = await model.generateContent(
-      `Subreddit: r/${post.subreddit}
+Rules:
+- Sound like a real person on Reddit, not a brand account or marketer
+- Lead with your actual take or experience — be opinionated
+- Vary your length based on the post. Some replies are one sentence ("Mega sketch." or "Bootstrappings best unless yr hardware."). Some are a quick 2-3 lines. Only write multiple paragraphs if the topic genuinely warrants depth. Dont default to any fixed structure
+- FORMATTING: Do NOT write walls of text. Use line breaks between distinct thoughts. But also dont over-paragraph — a 2 sentence reply doesnt need 2 paragraphs. Match how real people format Reddit comments: sometimes its one block, sometimes a few short lines with breaks between them, sometimes a mix of short and long
+- Only mention ${project.siteUrl || project.name} if its genuinely relevant — if theres no natural fit, dont mention it at all
+- If you do reference the site, be casual about it like "Ive got stuff on this at..." or just drop it naturally mid-sentence
+- Never say "check out" or "visit" — thats instant brand-account energy
+- No emojis. No "Hey!" or "Great question!" or any of that performative Reddit crap
+- Contractions without apostrophes: dont, theres, Im, Ive, yr, cant, wont, its (even for "it is")
+- Match the energy of the sub — blunt in r/startups, chill in r/JapanTravel, technical when needed
+- Its ok to be sharp or disagree with the premise of a post
+- Never use bullet points or numbered lists in the reply — real people dont structure Reddit comments like that`,
+        },
+        {
+          role: "user",
+          content: `Subreddit: r/${post.subreddit}
 Title: ${post.title}
 Post: ${post.selftext?.slice(0, 2000) || "(no body text)"}
 
-Write a helpful reply:`
-    );
+Write a helpful reply:`,
+        },
+      ],
+    });
 
-    const reply = result.response.text();
+    const reply = completion.choices[0]?.message?.content || "No reply generated";
 
     return NextResponse.json({ reply });
   } catch (error) {
-    console.error("Gemini error:", error);
+    console.error("Groq error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Generation failed" },
       { status: 500 }

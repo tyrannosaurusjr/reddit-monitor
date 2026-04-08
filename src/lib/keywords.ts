@@ -173,6 +173,33 @@ function matchesWholeWord(text: string, keyword: string): boolean {
   return regex.test(text);
 }
 
+// Intent signals — phrases that suggest the poster is seeking help/recommendations
+const INTENT_BOOST_PATTERNS = [
+  /\?/,                           // any question mark
+  /\b(?:looking for|searching for|trying to find)\b/,
+  /\b(?:recommend|recommendation|recommendations|suggest|suggestion|suggestions)\b/,
+  /\b(?:need help|need advice|any tips|any advice)\b/,
+  /\b(?:where can i|where should i|how do i|how can i|what should i)\b/,
+  /\b(?:first time|beginner|new to)\b/,
+  /\b(?:planning a trip|planning to visit|want to visit|visiting)\b/,
+  /\b(?:anyone know|does anyone|has anyone)\b/,
+  /\b(?:help me|advice needed|tips for|guide to)\b/,
+];
+
+function calculateIntentBoost(text: string): number {
+  let boost = 0;
+  for (const pattern of INTENT_BOOST_PATTERNS) {
+    if (pattern.test(text)) {
+      boost += 10;
+      if (boost >= 20) break; // cap intent boost at 20
+    }
+  }
+  return boost;
+}
+
+// Minimum score threshold — posts below this are not saved
+export const MIN_RELEVANCE_SCORE = 20;
+
 export function calculateRelevance(
   title: string,
   selftext: string,
@@ -202,14 +229,24 @@ export function calculateRelevance(
     }
   }
 
-  // Contextual keywords match in project's own subreddits
+  // Contextual keywords: require 2+ matches (single contextual keyword is too noisy)
   if (subreddit && keywords.contextualSubs.has(subreddit.toLowerCase())) {
+    const contextualMatches: Array<{ keyword: string; score: number }> = [];
     for (const keyword of keywords.contextual) {
       if (matchesWholeWord(text, keyword) && !matched.includes(keyword)) {
         const coResult = checkCoOccurrence(text, keyword);
         if (coResult === "reject") continue;
-        matched.push(keyword);
-        score += coResult === "boost" ? 25 : 15;
+        contextualMatches.push({
+          keyword,
+          score: coResult === "boost" ? 25 : 15,
+        });
+      }
+    }
+    // Only count contextual matches if there are 2+ (or 1 boosted by co-occurrence)
+    if (contextualMatches.length >= 2 || contextualMatches.some(m => m.score >= 25)) {
+      for (const m of contextualMatches) {
+        matched.push(m.keyword);
+        score += m.score;
       }
     }
   }
@@ -219,6 +256,11 @@ export function calculateRelevance(
     if (matchesWholeWord(titleLower, kw)) {
       score += 15;
     }
+  }
+
+  // Intent boost — reward posts where the user is asking for help/recommendations
+  if (matched.length > 0) {
+    score += calculateIntentBoost(text);
   }
 
   return { score, matched };
