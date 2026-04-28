@@ -15,3 +15,7 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
+
+## Failure Visibility
+
+This project follows the no-silent-failures rules in `~/Desktop/Projects/tyrannojr-github/project-rules/NO-SILENT-FAILURES.md`. If something goes wrong, the code must say so loudly — no swallowed exceptions, no masked exit codes, no silent fallbacks, no disabled tests without a tracked reason.
