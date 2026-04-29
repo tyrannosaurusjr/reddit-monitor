@@ -81,7 +81,10 @@ export default function MonitorPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setScanResult(`Scanned ${data.scanned} subreddits, found ${data.found} new relevant posts`);
+        const parts: string[] = [`Scanned ${data.scanned} subreddits, found ${data.found} new posts`];
+        if (data.warnings?.length) parts.push(`\nSetup issues:\n${(data.warnings as string[]).map((w: string) => `• ${w}`).join("\n")}`);
+        if (data.errors?.length) parts.push(`\nFailed:\n${(data.errors as string[]).map((e: string) => `• ${e}`).join("\n")}`);
+        setScanResult(parts.join(""));
       } else {
         setScanResult(`Error: ${data.error || "Scan failed"}`);
       }
@@ -113,7 +116,7 @@ export default function MonitorPage() {
       </div>
 
       {scanResult && (
-        <div className="mb-6 p-4 rounded-lg bg-blue-50 text-blue-700 text-sm">
+        <div className="mb-6 p-4 rounded-lg bg-blue-50 text-blue-700 text-sm whitespace-pre-wrap">
           {scanResult}
         </div>
       )}

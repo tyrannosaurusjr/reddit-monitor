@@ -9,24 +9,34 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const projectId = body.projectId;
 
-    // Get projects to scan
     const projects = projectId
       ? await prisma.project.findMany({ where: { id: projectId, enabled: true }, include: { subreddits: { where: { enabled: true } } } })
       : await prisma.project.findMany({ where: { enabled: true }, include: { subreddits: { where: { enabled: true } } } });
 
     if (projects.length === 0) {
-      return NextResponse.json({ message: "No projects configured", scanned: 0, found: 0, crossposts: 0 });
+      return NextResponse.json(
+        { error: "No enabled projects found. The project may be disabled or not exist.", scanned: 0, found: 0 },
+        { status: 400 }
+      );
     }
 
     let totalScanned = 0;
     let totalFound = 0;
     let crosspostsFound = 0;
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     for (const project of projects) {
-      if (project.subreddits.length === 0) continue;
+      if (project.subreddits.length === 0) {
+        warnings.push(`"${project.name}" has no enabled subreddits — go to Monitor and enable at least one.`);
+        continue;
+      }
 
       const keywords = await getKeywordsForProject(project.id);
+      if (keywords.global.length === 0 && keywords.contextual.length === 0) {
+        warnings.push(`"${project.name}" has no keywords configured — go to Settings and add keywords so posts can be matched.`);
+        continue;
+      }
 
       for (const sub of project.subreddits) {
         try {
@@ -82,7 +92,8 @@ export async function POST(req: NextRequest) {
       scanned: totalScanned,
       found: totalFound,
       crossposts: crosspostsFound,
-      ...(errors.length > 0 && { errors, warning: `${errors.length} subreddit(s) failed — Reddit may be blocking requests from this server's IP. Run scans locally with: bun run scan` }),
+      ...(warnings.length > 0 && { warnings }),
+      ...(errors.length > 0 && { errors }),
     });
   } catch (error) {
     console.error("Scan error:", error);
