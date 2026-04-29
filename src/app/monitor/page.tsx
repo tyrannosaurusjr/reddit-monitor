@@ -165,7 +165,7 @@ export default function MonitorPage() {
                     <div>
                       <span className="font-medium text-sm">r/{sub.name}</span>
                       <Badge variant="secondary" className="ml-2 text-xs">
-                        {sub._count.posts} posts
+                        {sub._count.posts} {sub._count.posts === 1 ? "post" : "posts"}
                       </Badge>
                     </div>
                   </div>

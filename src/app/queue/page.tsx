@@ -57,6 +57,7 @@ export default function QueuePage() {
   const [crosspostGroups, setCrosspostGroups] = useState<Record<string, CrosspostGroup[]>>({});
   const [generating, setGenerating] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generateErrorPostId, setGenerateErrorPostId] = useState<string | null>(null);
 
   const fetchPosts = useCallback(() => {
     if (!activeProject) return;
@@ -94,6 +95,7 @@ export default function QueuePage() {
     if (!activeProject) return;
     setGenerating(postId);
     setGenerateError(null);
+    setGenerateErrorPostId(null);
     try {
       const res = await fetch("/api/generate-reply", {
         method: "POST",
@@ -109,6 +111,7 @@ export default function QueuePage() {
       setExpandedPost(postId);
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : "Generation failed");
+      setGenerateErrorPostId(postId);
     } finally {
       setGenerating(null);
     }
@@ -303,7 +306,7 @@ export default function QueuePage() {
                       {generating === post.id && (
                         <span className="text-xs text-gray-400">Writing a contextual reply...</span>
                       )}
-                      {generateError && generating !== post.id && (
+                      {generateError && generateErrorPostId === post.id && (
                         <span className="text-xs text-red-500">{generateError}</span>
                       )}
                     </div>

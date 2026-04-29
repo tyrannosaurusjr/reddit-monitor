@@ -248,7 +248,7 @@ export default function DashboardPage() {
     return (
       <Card>
         <CardContent className="p-12 text-center">
-          <p className="text-gray-500">No projects set up yet. Go to Settings to create one.</p>
+          <p className="text-gray-500">No projects set up yet. <Link href="/settings" className="text-orange-600 hover:underline">Go to Settings</Link> to create one.</p>
         </CardContent>
       </Card>
     );

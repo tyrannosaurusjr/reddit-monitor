@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
 
   const postWhere = { projectId };
   const replyWhere = { projectId };
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const [
     totalPosts,
@@ -50,14 +51,14 @@ export async function GET(req: NextRequest) {
       select: { id: true, title: true, subreddit: true, permalink: true, relevanceScore: true, status: true, fetchedAt: true, score: true, numComments: true, matchedKeywords: true },
     }),
     prisma.monitoredPost.findMany({
-      where: { ...postWhere, status: "new" },
+      where: { ...postWhere, status: "new", createdUtc: { gte: sevenDaysAgo } },
       orderBy: { relevanceScore: "desc" },
       take: 50,
       select: { id: true, title: true, subreddit: true, permalink: true, relevanceScore: true, status: true, fetchedAt: true, createdUtc: true, score: true, numComments: true, matchedKeywords: true, author: true, selftext: true },
     }),
     // Trending: hottest posts across monitored subreddits (no keyword match required)
     prisma.monitoredPost.findMany({
-      where: { ...postWhere, status: "trending" },
+      where: { ...postWhere, status: "trending", createdUtc: { gte: sevenDaysAgo } },
       orderBy: { score: "desc" },
       take: 10,
       select: { id: true, title: true, subreddit: true, permalink: true, score: true, numComments: true, author: true, selftext: true, createdUtc: true, fetchedAt: true },

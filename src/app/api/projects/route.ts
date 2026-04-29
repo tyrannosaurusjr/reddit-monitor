@@ -33,17 +33,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Project limit reached. Upgrade to Pro for more projects." }, { status: 403 });
   }
 
-  const project = await prisma.project.create({
-    data: {
-      name,
-      slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-      siteUrl: siteUrl || "",
-      description: description || "",
-      color: color || "#f97316",
-      userId: auth.userId,
-    },
-  });
-  return NextResponse.json(project, { status: 201 });
+  try {
+    const project = await prisma.project.create({
+      data: {
+        name,
+        slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+        siteUrl: siteUrl || "",
+        description: description || "",
+        color: color || "#f97316",
+        userId: auth.userId,
+      },
+    });
+    return NextResponse.json(project, { status: 201 });
+  } catch (error: unknown) {
+    const e = error as { code?: string; message?: string };
+    if (e?.code === "P2002" || e?.message?.toLowerCase().includes("unique")) {
+      return NextResponse.json({ error: "A project with that slug already exists." }, { status: 409 });
+    }
+    console.error("[Projects POST]", error);
+    return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -142,7 +143,7 @@ export default function RepliesPage() {
                   <div>
                     <p className="text-gray-700 font-medium">No {tab} replies yet</p>
                     <p className="text-gray-400 text-sm mt-1">
-                      {tab === "draft" && "Head to the Queue to draft replies to relevant posts."}
+                      {tab === "draft" && <><Link href="/queue" className="text-orange-600 hover:underline">Head to the Queue</Link> to draft replies to relevant posts.</>}
                       {tab === "scheduled" && "Drafts you schedule will appear here."}
                       {tab === "posted" && "Successfully posted replies show up here."}
                       {tab === "failed" && "No failed replies. That's a good thing!"}
