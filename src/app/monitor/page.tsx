@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,20 +23,22 @@ export default function MonitorPage() {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [togglingAll, setTogglingAll] = useState(false);
 
-  const fetchSubreddits = () => {
+  const fetchSubreddits = useCallback(() => {
     if (!activeProject) return;
     fetch(`/api/subreddits?projectId=${activeProject.id}`)
       .then((r) => r.json())
       .then(setSubreddits)
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [activeProject]);
 
   useEffect(() => {
     setLoading(true);
     fetchSubreddits();
-  }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchSubreddits]);
 
   const addSubreddit = async () => {
     if (!newName.trim() || !activeProject) return;
@@ -52,12 +54,37 @@ export default function MonitorPage() {
   };
 
   const toggleSubreddit = async (id: string, enabled: boolean) => {
-    await fetch("/api/subreddits", {
+    setToggleError(null);
+    const res = await fetch("/api/subreddits", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, enabled: !enabled }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setToggleError(data.error || `Failed to update subreddit (${res.status})`);
+    }
     fetchSubreddits();
+  };
+
+  const enableAll = async () => {
+    if (!activeProject) return;
+    setTogglingAll(true);
+    setToggleError(null);
+    const disabled = subreddits.filter((s) => !s.enabled);
+    const results = await Promise.all(
+      disabled.map((s) =>
+        fetch("/api/subreddits", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: s.id, enabled: true }),
+        })
+      )
+    );
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed > 0) setToggleError(`${failed} subreddit(s) failed to enable`);
+    fetchSubreddits();
+    setTogglingAll(false);
   };
 
   const deleteSubreddit = async (id: string) => {
@@ -99,6 +126,9 @@ export default function MonitorPage() {
   if (!activeProject) {
     return <p className="text-gray-500">Select a project from the sidebar.</p>;
   }
+
+  const enabledCount = subreddits.filter((s) => s.enabled).length;
+  const hasDisabled = subreddits.some((s) => !s.enabled);
 
   return (
     <div>
@@ -147,9 +177,29 @@ export default function MonitorPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Monitored Subreddits</CardTitle>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Monitored Subreddits</CardTitle>
+              {subreddits.length > 0 && (
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {enabledCount} of {subreddits.length} enabled
+                </p>
+              )}
+            </div>
+            {hasDisabled && (
+              <Button size="sm" variant="outline" onClick={enableAll} disabled={togglingAll}>
+                <Power className="h-3 w-3 mr-1.5 text-green-500" />
+                {togglingAll ? "Enabling..." : "Enable All"}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
+          {toggleError && (
+            <div className="mb-3 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+              {toggleError}
+            </div>
+          )}
           {loading ? (
             <p className="text-gray-500 text-sm">Loading...</p>
           ) : subreddits.length === 0 ? (
@@ -161,7 +211,7 @@ export default function MonitorPage() {
               {subreddits.map((sub) => (
                 <div
                   key={sub.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50"
+                  className={`flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 ${sub.enabled ? "border-gray-100" : "border-gray-200 bg-gray-50 opacity-60"}`}
                 >
                   <div className="flex items-center gap-3">
                     <Radio className={`h-4 w-4 ${sub.enabled ? "text-green-500" : "text-gray-300"}`} />
@@ -170,6 +220,9 @@ export default function MonitorPage() {
                       <Badge variant="secondary" className="ml-2 text-xs">
                         {sub._count.posts} {sub._count.posts === 1 ? "post" : "posts"}
                       </Badge>
+                      {!sub.enabled && (
+                        <Badge variant="outline" className="ml-1 text-xs text-gray-400">disabled</Badge>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
