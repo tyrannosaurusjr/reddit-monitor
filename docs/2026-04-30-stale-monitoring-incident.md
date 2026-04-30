@@ -34,13 +34,13 @@ The incident was resolved on April 30, 2026 by repairing the scheduler path, har
 The real user crontab still pointed to the old path:
 
 ```bash
-/Users/mkultraman/Desktop/tyrannojr-github/reddit-monitor
+/path/to/old/reddit-monitor
 ```
 
 The active repo path had changed to:
 
 ```bash
-/Users/mkultraman/Desktop/Projects/tyrannojr-github/reddit-monitor
+/path/to/reddit-monitor
 ```
 
 Because of that, automatic scans effectively stopped after the move.
@@ -76,8 +76,8 @@ The Vercel project was already GitHub-linked. The real issue was not missing Git
 
 Findings:
 
-- Vercel project owner: `tyrannosaurusjr's projects`
-- Git link existed to `tyrannosaurusjr/reddit-monitor`
+- Vercel project owner: `the Vercel project owner`
+- Git link existed to `YOUR_USERNAME/reddit-monitor`
 - production branch in Vercel metadata: `claude/reddit-outreach-platform-0EcWL`
 - last production deployment before the fix: April 6, 2026
 
@@ -143,7 +143,7 @@ Changes:
 Real crontab was replaced with:
 
 ```bash
-*/30 * * * * /bin/bash /Users/mkultraman/Desktop/Projects/tyrannojr-github/reddit-monitor/scripts/cron-scan.sh
+*/30 * * * * /bin/bash /path/to/reddit-monitor/scripts/cron-scan.sh
 ```
 
 ### Shared monitored-post scan logic
@@ -306,7 +306,7 @@ npx tsx scripts/local-scan.ts
 Inspect Vercel Git linkage:
 
 ```bash
-vercel git connect https://github.com/tyrannosaurusjr/reddit-monitor.git
+vercel git connect https://github.com/YOUR_USERNAME/reddit-monitor.git
 vercel api /v9/projects/prj_LdOinbetuZMNDSsKBHpUrBHYVJ2c
 ```
 

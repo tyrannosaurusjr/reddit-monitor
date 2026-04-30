@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest();
+  if ("error" in auth) return auth.error;
+
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
 
   const projects = await prisma.project.findMany({
+    where: { userId: auth.userId },
     include: {
       subreddits: { select: { name: true, enabled: true } },
       keywords: { where: { enabled: true }, select: { keyword: true } },

@@ -8,9 +8,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_DIR/logs"
-NODE_BIN="/Users/mkultraman/.nvm/versions/node/v24.13.1/bin"
-
-export PATH="$NODE_BIN:$PATH"
+# Add your node bin path here if npx isn't on PATH (e.g. nvm users)
+# NODE_BIN="$HOME/.nvm/versions/node/$(node --version)/bin"
+# export PATH="$NODE_BIN:$PATH"
 
 mkdir -p "$LOG_DIR"
 cd "$PROJECT_DIR"

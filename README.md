@@ -1,6 +1,6 @@
 # RedditReach
 
-Monitor subreddits for keyword-matched posts, draft replies, and schedule outreach — built for jacamp.com.
+Monitor subreddits for keyword-matched posts, draft replies, and schedule outreach for any site or brand.
 
 ## Features
 

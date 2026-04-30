@@ -10,7 +10,6 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/health") ||
-    pathname.startsWith("/api/debug") ||
     pathname.startsWith("/api/stripe/webhook") ||
     pathname === "/login" ||
     pathname.startsWith("/_next") ||
