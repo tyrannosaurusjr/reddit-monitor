@@ -98,6 +98,10 @@ The built-in scheduler runs two jobs:
 
 Start cron by hitting `POST /api/cron/start` or triggering it from the Settings page.
 
+## Operations
+
+- Incident note: [docs/2026-04-30-stale-monitoring-incident.md](docs/2026-04-30-stale-monitoring-incident.md)
+
 ## Companion Tool
 
 This app is designed to complement [Later for Reddit](https://laterforreddit.com/) (scheduling your own posts at optimal times). RedditReach handles the other half: finding and engaging with other people's posts.
