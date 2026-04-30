@@ -12,6 +12,7 @@ interface Subreddit {
   id: string;
   name: string;
   enabled: boolean;
+  contextual: boolean;
   createdAt: string;
   _count: { posts: number };
 }
@@ -67,6 +68,20 @@ export default function MonitorPage() {
     fetchSubreddits();
   };
 
+  const toggleContextual = async (id: string, contextual: boolean) => {
+    setToggleError(null);
+    const res = await fetch("/api/subreddits", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, contextual: !contextual }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setToggleError(data.error || `Failed to update subreddit (${res.status})`);
+    }
+    fetchSubreddits();
+  };
+
   const enableAll = async () => {
     if (!activeProject) return;
     setTogglingAll(true);
@@ -109,6 +124,7 @@ export default function MonitorPage() {
       const data = await res.json();
       if (res.ok) {
         const parts: string[] = [`Scanned ${data.scanned} subreddits, found ${data.found} new posts`];
+        if (data.updated) parts[0] += `, refreshed ${data.updated} existing posts`;
         if (data.warnings?.length) parts.push(`\nSetup issues:\n${(data.warnings as string[]).map((w: string) => `• ${w}`).join("\n")}`);
         if (data.errors?.length) parts.push(`\nFailed:\n${(data.errors as string[]).map((e: string) => `• ${e}`).join("\n")}`);
         setScanResult(parts.join(""));
@@ -185,6 +201,9 @@ export default function MonitorPage() {
                   {enabledCount} of {subreddits.length} enabled
                 </p>
               )}
+              <p className="text-xs text-gray-400 mt-1">
+                Mark a subreddit as contextual if broad contextual keywords should match there.
+              </p>
             </div>
             {hasDisabled && (
               <Button size="sm" variant="outline" onClick={enableAll} disabled={togglingAll}>
@@ -220,12 +239,24 @@ export default function MonitorPage() {
                       <Badge variant="secondary" className="ml-2 text-xs">
                         {sub._count.posts} {sub._count.posts === 1 ? "post" : "posts"}
                       </Badge>
+                      {sub.contextual && (
+                        <Badge variant="outline" className="ml-1 text-xs border-blue-200 text-blue-700">
+                          contextual
+                        </Badge>
+                      )}
                       {!sub.enabled && (
                         <Badge variant="outline" className="ml-1 text-xs text-gray-400">disabled</Badge>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant={sub.contextual ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleContextual(sub.id, sub.contextual)}
+                    >
+                      Contextual
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

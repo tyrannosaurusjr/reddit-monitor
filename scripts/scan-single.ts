@@ -2,6 +2,12 @@
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import {
+  calculateRelevance,
+  type ProjectKeywords,
+  type ScannablePost,
+  upsertScannedPost,
+} from "./scan-helpers.js";
 
 const adapter = new PrismaLibSql({
   url: process.env.DATABASE_URL!,
@@ -11,11 +17,6 @@ const prisma = new PrismaClient({ adapter });
 
 const projectId = process.argv[2];
 if (!projectId) { console.error("Usage: npx tsx scripts/scan-single.ts <projectId>"); process.exit(1); }
-
-function matchesWholeWord(text: string, keyword: string): boolean {
-  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b${escaped}\\b`).test(text);
-}
 
 async function main() {
   const project = await prisma.project.findUnique({
@@ -32,10 +33,16 @@ async function main() {
   const contextualSubs = new Set(
     project.subreddits.filter((s: any) => s.contextual).map((s: any) => s.name.toLowerCase())
   );
+  const keywords: ProjectKeywords = {
+    global: globals,
+    contextual: contextuals,
+    contextualSubs,
+  };
 
   console.log(`Scanning ${project.name}: ${project.subreddits.length} subs, ${globals.length} global + ${contextuals.length} contextual keywords`);
 
   let found = 0;
+  let updated = 0;
 
   for (const sub of project.subreddits) {
     for (const sortConfig of [{ sort: "new", time: "" }, { sort: "top", time: "week" }]) {
@@ -49,50 +56,29 @@ async function main() {
         const data = await res.json();
         const posts = data.data.children.map((c: any) => c.data);
 
-        for (const post of posts) {
-          const text = `${post.title} ${post.selftext || ""}`.toLowerCase();
-          const titleLower = post.title.toLowerCase();
-          const matched: string[] = [];
-          let score = 0;
+        for (const post of posts as ScannablePost[]) {
+          const { score } = calculateRelevance(
+            post.title,
+            post.selftext || "",
+            keywords,
+            sub.name
+          );
 
-          for (const kw of globals) {
-            if (matchesWholeWord(text, kw)) {
-              matched.push(kw);
-              score += kw.split(" ").length * 10;
-            }
-          }
+          const result = await upsertScannedPost(prisma, {
+            projectId,
+            subredditTargetId: sub.id,
+            subredditName: sub.name,
+            post,
+            keywords,
+          });
 
-          if (contextualSubs.has(sub.name.toLowerCase())) {
-            for (const kw of contextuals) {
-              if (!matched.includes(kw) && matchesWholeWord(text, kw)) {
-                matched.push(kw);
-                score += 15;
-              }
-            }
-          }
-
-          if (score === 0) continue;
-
-          // Title boost
-          for (const kw of matched) {
-            if (matchesWholeWord(titleLower, kw)) score += 15;
-          }
-
-          try {
-            await prisma.monitoredPost.create({
-              data: {
-                redditId: post.name, subreddit: post.subreddit, title: post.title,
-                selftext: post.selftext || "", author: post.author, url: post.url,
-                permalink: `https://reddit.com${post.permalink}`,
-                score: post.score, numComments: post.num_comments,
-                createdUtc: new Date(post.created_utc * 1000),
-                relevanceScore: score, matchedKeywords: matched.join(","),
-                projectId, subredditTargetId: sub.id, status: "new",
-              },
-            });
+          if (result.action === "created") {
             found++;
-            console.log(`  [${score}] r/${post.subreddit}: ${post.title.slice(0, 70)}`);
-          } catch { /* duplicate */ }
+            console.log(`  [${score}] new r/${post.subreddit}: ${post.title.slice(0, 70)}`);
+          } else if (result.action === "updated") {
+            updated++;
+            console.log(`  [${score}] refreshed r/${post.subreddit}: ${post.title.slice(0, 70)}`);
+          }
         }
 
         // Reddit allows ~30 requests/min — wait 3 seconds between requests
@@ -103,7 +89,7 @@ async function main() {
     }
   }
 
-  console.log(`\nDone — ${found} posts found for ${project.name}`);
+  console.log(`\nDone — ${found} new posts, ${updated} refreshed for ${project.name}`);
   process.exit(0);
 }
 

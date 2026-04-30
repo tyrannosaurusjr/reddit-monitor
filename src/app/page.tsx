@@ -61,6 +61,14 @@ interface Stats {
   posts: { total: number; new: number; queued: number; replied: number; dismissed: number };
   replies: { total: number; draft: number; scheduled: number; posted: number; failed: number };
   subredditCount: number;
+  health: {
+    enabledSubredditCount: number;
+    totalSubredditCount: number;
+    enabledKeywordCount: number;
+    dueScheduledReplies: number;
+    lastFetchedAt: string | null;
+    scanReady: boolean;
+  };
   recentPosts: PostSummary[];
   topPosts: TopPost[];
   trendingPosts: TrendingPost[];
@@ -115,6 +123,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -124,24 +133,63 @@ export default function DashboardPage() {
     new Set<RankingFactor>(["keywords", "upvotes", "comments", "freshness"])
   );
 
-  const fetchStats = (showSpinner = true) => {
+  const fetchStats = async (showSpinner = true) => {
     if (!activeProject) {
       setLoading(false);
       return;
     }
     if (showSpinner) setLoading(true);
-    else setRefreshing(true);
-    fetch(`/api/stats?projectId=${activeProject.id}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status}`);
-        return r.json();
-      })
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => { setLoading(false); setRefreshing(false); });
+    try {
+      const r = await fetch(`/api/stats?projectId=${activeProject.id}`);
+      if (!r.ok) throw new Error(`${r.status}`);
+      const data = await r.json();
+      setStats(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      if (showSpinner) setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchStats(); }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setScanMessage(null);
+    void fetchStats();
+  }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshDashboard = async () => {
+    if (!activeProject) return;
+
+    setRefreshing(true);
+    setScanMessage(null);
+
+    try {
+      const scanRes = await fetch("/api/posts/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id }),
+      });
+      const scanData = await scanRes.json().catch(() => ({}));
+
+      if (scanRes.ok) {
+        if (Array.isArray(scanData.warnings) && scanData.warnings.length > 0) {
+          setScanMessage(scanData.warnings[0]);
+        } else if (Array.isArray(scanData.errors) && scanData.errors.length > 0) {
+          setScanMessage(`Scan errors: ${scanData.errors[0]}`);
+        } else {
+          setScanMessage(
+            `Scan complete: ${scanData.found ?? 0} new posts, ${scanData.updated ?? 0} refreshed.`
+          );
+        }
+      } else {
+        setScanMessage(scanData.error || `Scan failed (${scanRes.status})`);
+      }
+    } catch (error) {
+      setScanMessage(error instanceof Error ? error.message : "Scan failed");
+    } finally {
+      await fetchStats(false);
+      setRefreshing(false);
+    }
+  };
 
   const saveReply = async (postId: string, schedule: boolean) => {
     const content = replyContent[postId];
@@ -160,7 +208,7 @@ export default function DashboardPage() {
       });
       setReplyContent((prev) => ({ ...prev, [postId]: "" }));
       setExpandedPost(null);
-      fetchStats(false);
+      await fetchStats(false);
     } catch (e) {
       console.error("Failed to save reply:", e);
     } finally {
@@ -174,7 +222,7 @@ export default function DashboardPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: postId, status: "dismissed" }),
     });
-    fetchStats(false);
+    await fetchStats(false);
   };
 
   const generateReply = async (postId: string) => {
@@ -256,12 +304,22 @@ export default function DashboardPage() {
 
   if (!stats) return <p className="text-gray-500">Failed to load stats.</p>;
 
+  const lastFetchedAt = stats.health.lastFetchedAt ? new Date(stats.health.lastFetchedAt) : null;
+  const hoursSinceLastFetch = lastFetchedAt
+    ? (Date.now() - lastFetchedAt.getTime()) / 3600000
+    : null;
+  const monitoringDisabled = stats.health.enabledSubredditCount === 0;
+  const keywordsMissing = stats.health.enabledKeywordCount === 0;
+  const scanLooksStale =
+    !monitoringDisabled && !keywordsMissing && hoursSinceLastFetch != null && hoursSinceLastFetch > 12;
+  const hasDueReplies = stats.health.dueScheduledReplies > 0;
+
   const statCards = [
     { label: "New Posts", value: stats.posts.new, icon: MessageSquare, color: "text-blue-600", bg: "bg-blue-50" },
     { label: "Queued", value: stats.posts.queued, icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50" },
     { label: "Replies Sent", value: stats.replies.posted, icon: Send, color: "text-green-600", bg: "bg-green-50" },
     { label: "Scheduled", value: stats.replies.scheduled, icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
-    { label: "Subreddits", value: stats.subredditCount, icon: Radio, color: "text-orange-600", bg: "bg-orange-50" },
+    { label: "Enabled Subreddits", value: stats.subredditCount, icon: Radio, color: "text-orange-600", bg: "bg-orange-50" },
     { label: "Failed", value: stats.replies.failed, icon: AlertCircle, color: "text-red-600", bg: "bg-red-50" },
   ];
 
@@ -282,13 +340,61 @@ export default function DashboardPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => fetchStats(false)}
+          onClick={refreshDashboard}
           disabled={refreshing}
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-          {refreshing ? "Refreshing..." : "Refresh"}
+          {refreshing ? "Scanning..." : "Refresh"}
         </Button>
       </div>
+
+      {scanMessage && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {scanMessage}
+        </div>
+      )}
+
+      {monitoringDisabled && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Monitoring is off for this project. {stats.health.totalSubredditCount} subreddit targets exist, but 0 are enabled.
+          {lastFetchedAt && <> Last scan: {lastFetchedAt.toLocaleString()}.</>} The posts below are historical.
+          {" "}
+          <Link href="/monitor" className="font-medium underline underline-offset-2">
+            Open Monitor
+          </Link>
+          {" "}and enable at least one subreddit.
+        </div>
+      )}
+
+      {keywordsMissing && !monitoringDisabled && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          This project has no enabled keywords, so scans cannot find actionable posts.
+          {" "}
+          <Link href="/settings" className="font-medium underline underline-offset-2">
+            Open Settings
+          </Link>
+          {" "}to add or re-enable keywords.
+        </div>
+      )}
+
+      {scanLooksStale && lastFetchedAt && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          Monitoring data looks stale. Last successful fetch: {lastFetchedAt.toLocaleString()}.
+          {" "}Use Refresh to run a new scan for this project.
+        </div>
+      )}
+
+      {hasDueReplies && (
+        <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-900">
+          {stats.health.dueScheduledReplies} scheduled repl{stats.health.dueScheduledReplies === 1 ? "y is" : "ies are"} overdue.
+          Background reply posting is not keeping up.
+          {" "}
+          <Link href="/replies" className="font-medium underline underline-offset-2">
+            Open Replies
+          </Link>
+          {" "}to review them.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {statCards.map((s) => (

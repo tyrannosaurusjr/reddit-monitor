@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getKeywordsForProject, calculateRelevance } from "@/lib/keywords";
-import { detectCrosspost, RedditPostWithCrosspost } from "@/lib/crosspost";
+import { getKeywordsForProject } from "@/lib/keywords";
+import { upsertScannedPost } from "@/lib/monitored-posts";
 
 // Secret to authenticate local scan scripts. Set INGEST_SECRET in .env.
 // Without this, anyone could POST arbitrary posts into the DB.
@@ -46,47 +45,27 @@ export async function POST(req: NextRequest) {
 
     const keywords = await getKeywordsForProject(projectId);
     let found = 0;
+    let updated = 0;
     let skipped = 0;
     let crosspostsFound = 0;
 
     for (const post of posts) {
-      const existing = await prisma.monitoredPost.findUnique({
-        where: { redditId_projectId: { redditId: post.name, projectId } },
+      const result = await upsertScannedPost({
+        projectId,
+        subredditTargetId: subredditId || null,
+        subredditName,
+        post,
+        keywords,
       });
-      if (existing) { skipped++; continue; }
 
-      const { score, matched } = calculateRelevance(post.title, post.selftext, keywords, subredditName);
-      if (score === 0) { skipped++; continue; }
+      if (result.action === "created") found++;
+      else if (result.action === "updated") updated++;
+      else skipped++;
 
-      const crosspostInfo = await detectCrosspost(post as unknown as RedditPostWithCrosspost);
-      if (crosspostInfo.isCrosspost) crosspostsFound++;
-
-      await prisma.monitoredPost.create({
-        data: {
-          redditId: post.name,
-          subreddit: post.subreddit,
-          title: post.title,
-          selftext: post.selftext || "",
-          author: post.author,
-          url: post.url,
-          permalink: post.permalink.startsWith("http") ? post.permalink : `https://reddit.com${post.permalink}`,
-          score: post.score,
-          numComments: post.num_comments,
-          createdUtc: new Date(post.created_utc * 1000),
-          relevanceScore: score,
-          matchedKeywords: matched.join(","),
-          projectId,
-          subredditTargetId: subredditId || null,
-          status: "new",
-          isCrosspost: crosspostInfo.isCrosspost,
-          crosspostParentId: crosspostInfo.crosspostParentId,
-          crosspostGroupId: crosspostInfo.crosspostGroupId,
-        },
-      });
-      found++;
+      if (result.isCrosspost) crosspostsFound++;
     }
 
-    return NextResponse.json({ found, skipped, crossposts: crosspostsFound });
+    return NextResponse.json({ found, updated, skipped, crossposts: crosspostsFound });
   } catch (error) {
     console.error("Ingest error:", error);
     return NextResponse.json(

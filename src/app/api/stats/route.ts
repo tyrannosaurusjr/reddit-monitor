@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
 
   const postWhere = { projectId };
   const replyWhere = { projectId };
+  const actionableNewPostWhere = { ...postWhere, status: "new", relevanceScore: { gt: 0 } };
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const [
@@ -29,12 +30,16 @@ export async function GET(req: NextRequest) {
     postedReplies,
     failedReplies,
     subredditCount,
+    totalSubredditCount,
+    keywordCount,
+    dueScheduledReplies,
+    latestFetchedPost,
     recentPosts,
     topPosts,
     trendingPosts,
   ] = await Promise.all([
     prisma.monitoredPost.count({ where: postWhere }),
-    prisma.monitoredPost.count({ where: { ...postWhere, status: "new" } }),
+    prisma.monitoredPost.count({ where: actionableNewPostWhere }),
     prisma.monitoredPost.count({ where: { ...postWhere, status: "queued" } }),
     prisma.monitoredPost.count({ where: { ...postWhere, status: "replied" } }),
     prisma.monitoredPost.count({ where: { ...postWhere, status: "dismissed" } }),
@@ -44,6 +49,20 @@ export async function GET(req: NextRequest) {
     prisma.draftReply.count({ where: { ...replyWhere, status: "posted" } }),
     prisma.draftReply.count({ where: { ...replyWhere, status: "failed" } }),
     prisma.subredditTarget.count({ where: { projectId, enabled: true } }),
+    prisma.subredditTarget.count({ where: { projectId } }),
+    prisma.keywordFilter.count({ where: { projectId, enabled: true } }),
+    prisma.draftReply.count({
+      where: {
+        ...replyWhere,
+        status: "scheduled",
+        scheduledFor: { lte: new Date() },
+      },
+    }),
+    prisma.monitoredPost.findFirst({
+      where: postWhere,
+      orderBy: { fetchedAt: "desc" },
+      select: { fetchedAt: true },
+    }),
     prisma.monitoredPost.findMany({
       where: postWhere,
       orderBy: { fetchedAt: "desc" },
@@ -51,7 +70,7 @@ export async function GET(req: NextRequest) {
       select: { id: true, title: true, subreddit: true, permalink: true, relevanceScore: true, status: true, fetchedAt: true, score: true, numComments: true, matchedKeywords: true },
     }),
     prisma.monitoredPost.findMany({
-      where: { ...postWhere, status: "new", createdUtc: { gte: sevenDaysAgo } },
+      where: { ...actionableNewPostWhere, createdUtc: { gte: sevenDaysAgo } },
       orderBy: { relevanceScore: "desc" },
       take: 50,
       select: { id: true, title: true, subreddit: true, permalink: true, relevanceScore: true, status: true, fetchedAt: true, createdUtc: true, score: true, numComments: true, matchedKeywords: true, author: true, selftext: true },
@@ -69,6 +88,14 @@ export async function GET(req: NextRequest) {
     posts: { total: totalPosts, new: newPosts, queued: queuedPosts, replied: repliedPosts, dismissed: dismissedPosts },
     replies: { total: totalReplies, draft: draftReplies, scheduled: scheduledReplies, posted: postedReplies, failed: failedReplies },
     subredditCount,
+    health: {
+      enabledSubredditCount: subredditCount,
+      totalSubredditCount,
+      enabledKeywordCount: keywordCount,
+      dueScheduledReplies,
+      lastFetchedAt: latestFetchedPost?.fetchedAt ?? null,
+      scanReady: subredditCount > 0 && keywordCount > 0,
+    },
     recentPosts,
     topPosts,
     trendingPosts,

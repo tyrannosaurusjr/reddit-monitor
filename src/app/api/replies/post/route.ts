@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { postComment } from "@/lib/reddit";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await authenticateRequest();
+  if ("error" in auth) return auth.error;
+
   const { replyId } = await req.json();
 
   const reply = await prisma.draftReply.findUnique({
     where: { id: replyId },
-    include: { post: true },
+    include: {
+      post: true,
+      project: { select: { userId: true } },
+    },
   });
 
-  if (!reply) {
+  if (!reply || reply.project.userId !== auth.userId) {
     return NextResponse.json({ error: "Reply not found" }, { status: 404 });
   }
 

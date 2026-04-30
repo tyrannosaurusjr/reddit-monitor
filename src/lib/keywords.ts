@@ -1,5 +1,11 @@
 import { prisma } from "./prisma";
 
+export interface ProjectKeywords {
+  global: string[];
+  contextual: string[];
+  contextualSubs: Set<string>;
+}
+
 // Co-occurrence rules for ambiguous keywords
 // If an ambiguous keyword is found, check for boost/reject terms
 // Boost: increases score (confirms relevance)
@@ -139,7 +145,7 @@ function checkCoOccurrence(
 // Get keywords for a specific project
 export async function getKeywordsForProject(
   projectId: string
-): Promise<{ global: string[]; contextual: string[]; contextualSubs: Set<string> }> {
+): Promise<ProjectKeywords> {
   const [dbKeywords, subreddits] = await Promise.all([
     prisma.keywordFilter.findMany({
       where: { projectId, enabled: true },
@@ -176,7 +182,7 @@ function matchesWholeWord(text: string, keyword: string): boolean {
 export function calculateRelevance(
   title: string,
   selftext: string,
-  keywords: { global: string[]; contextual: string[]; contextualSubs: Set<string> },
+  keywords: ProjectKeywords,
   subreddit?: string
 ): { score: number; matched: string[] } {
   const text = `${title} ${selftext}`.toLowerCase();

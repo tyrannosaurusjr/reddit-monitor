@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = { projectId };
   if (status !== "all") where.status = status;
+  if (status === "new") where.relevanceScore = { gt: 0 };
   if (subreddit) where.subreddit = subreddit;
   if (crosspostGroup) where.crosspostGroupId = crosspostGroup;
 

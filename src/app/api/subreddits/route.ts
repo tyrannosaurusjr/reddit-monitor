@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
 import { checkSubredditLimit } from "@/lib/auth";
+import { rescoreProjectPosts } from "@/lib/monitored-posts";
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateRequest();
@@ -59,7 +60,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await authenticateRequest();
   if ("error" in auth) return auth.error;
 
-  const { id, enabled } = await req.json();
+  const { id, enabled, contextual } = await req.json();
   const sub = await prisma.subredditTarget.findUnique({
     where: { id },
     include: { project: { select: { userId: true } } },
@@ -68,7 +69,20 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const updated = await prisma.subredditTarget.update({ where: { id }, data: { enabled } });
+  const data: { enabled?: boolean; contextual?: boolean } = {};
+  if (enabled !== undefined) data.enabled = enabled;
+  if (contextual !== undefined) data.contextual = contextual;
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "No changes requested" }, { status: 400 });
+  }
+
+  const updated = await prisma.subredditTarget.update({ where: { id }, data });
+
+  if (contextual !== undefined) {
+    await rescoreProjectPosts(sub.projectId);
+  }
+
   return NextResponse.json(updated);
 }
 

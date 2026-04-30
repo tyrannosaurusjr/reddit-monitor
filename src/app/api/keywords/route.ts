@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
 import { checkKeywordLimit } from "@/lib/auth";
+import { rescoreProjectPosts } from "@/lib/monitored-posts";
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateRequest();
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
       isGlobal: isGlobal ?? false,
     },
   });
+  await rescoreProjectPosts(projectId);
   return NextResponse.json(kw, { status: 201 });
 }
 
@@ -63,6 +65,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const updated = await prisma.keywordFilter.update({ where: { id }, data: { enabled } });
+  await rescoreProjectPosts(kw.projectId);
   return NextResponse.json(updated);
 }
 
@@ -80,5 +83,6 @@ export async function DELETE(req: NextRequest) {
   }
 
   await prisma.keywordFilter.delete({ where: { id } });
+  await rescoreProjectPosts(kw.projectId);
   return NextResponse.json({ success: true });
 }

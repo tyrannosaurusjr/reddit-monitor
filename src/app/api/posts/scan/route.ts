@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchSubredditPosts } from "@/lib/reddit";
-import { getKeywordsForProject, calculateRelevance } from "@/lib/keywords";
-import { detectCrosspost, RedditPostWithCrosspost } from "@/lib/crosspost";
+import { getKeywordsForProject } from "@/lib/keywords";
+import { upsertScannedPost } from "@/lib/monitored-posts";
+import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await authenticateRequest();
+    if ("error" in auth) return auth.error;
+
     const body = await req.json().catch(() => ({}));
     const projectId = body.projectId;
 
     const projects = projectId
-      ? await prisma.project.findMany({ where: { id: projectId, enabled: true }, include: { subreddits: { where: { enabled: true } } } })
-      : await prisma.project.findMany({ where: { enabled: true }, include: { subreddits: { where: { enabled: true } } } });
+      ? await prisma.project.findMany({
+          where: { id: projectId, enabled: true, userId: auth.userId },
+          include: { subreddits: { where: { enabled: true } } },
+        })
+      : await prisma.project.findMany({
+          where: { enabled: true, userId: auth.userId },
+          include: { subreddits: { where: { enabled: true } } },
+        });
+
+    if (projectId && !(await verifyProjectOwnership(projectId, auth.userId))) {
+      return NextResponse.json({ error: "Invalid project" }, { status: 403 });
+    }
 
     if (projects.length === 0) {
       return NextResponse.json(
@@ -22,6 +36,7 @@ export async function POST(req: NextRequest) {
 
     let totalScanned = 0;
     let totalFound = 0;
+    let totalUpdated = 0;
     let crosspostsFound = 0;
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -44,40 +59,17 @@ export async function POST(req: NextRequest) {
           totalScanned++;
 
           for (const post of posts) {
-            const existing = await prisma.monitoredPost.findUnique({
-              where: { redditId_projectId: { redditId: post.name, projectId: project.id } },
+            const result = await upsertScannedPost({
+              projectId: project.id,
+              subredditTargetId: sub.id,
+              subredditName: sub.name,
+              post,
+              keywords,
             });
-            if (existing) continue;
 
-            const { score, matched } = calculateRelevance(post.title, post.selftext, keywords, sub.name);
-            if (score === 0) continue;
-
-            const crosspostInfo = await detectCrosspost(post as RedditPostWithCrosspost);
-            if (crosspostInfo.isCrosspost) crosspostsFound++;
-
-            await prisma.monitoredPost.create({
-              data: {
-                redditId: post.name,
-                subreddit: post.subreddit,
-                title: post.title,
-                selftext: post.selftext || "",
-                author: post.author,
-                url: post.url,
-                permalink: `https://reddit.com${post.permalink}`,
-                score: post.score,
-                numComments: post.num_comments,
-                createdUtc: new Date(post.created_utc * 1000),
-                relevanceScore: score,
-                matchedKeywords: matched.join(","),
-                projectId: project.id,
-                subredditTargetId: sub.id,
-                status: "new",
-                isCrosspost: crosspostInfo.isCrosspost,
-                crosspostParentId: crosspostInfo.crosspostParentId,
-                crosspostGroupId: crosspostInfo.crosspostGroupId,
-              },
-            });
-            totalFound++;
+            if (result.action === "created") totalFound++;
+            if (result.action === "updated") totalUpdated++;
+            if (result.isCrosspost) crosspostsFound++;
           }
         } catch (err) {
           const msg = `r/${sub.name}: ${err instanceof Error ? err.message : String(err)}`;
@@ -91,6 +83,7 @@ export async function POST(req: NextRequest) {
       message: `Scanned ${totalScanned} subreddits across ${projects.length} projects`,
       scanned: totalScanned,
       found: totalFound,
+      updated: totalUpdated,
       crossposts: crosspostsFound,
       ...(warnings.length > 0 && { warnings }),
       ...(errors.length > 0 && { errors }),

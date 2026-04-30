@@ -235,7 +235,7 @@ export default function SettingsPage() {
               <CardTitle className="text-lg">Keywords for {activeProject.name}</CardTitle>
               <CardDescription>
                 <strong>Global</strong> keywords match in any subreddit (e.g. &ldquo;camping japan&rdquo;).{" "}
-                <strong>Contextual</strong> keywords only match in Japan-specific subreddits (e.g. &ldquo;hiking&rdquo;).
+                <strong>Contextual</strong> keywords only match in subreddit targets you mark as contextual on the Monitor page (e.g. &ldquo;hiking&rdquo;).
               </CardDescription>
             </CardHeader>
             <CardContent>

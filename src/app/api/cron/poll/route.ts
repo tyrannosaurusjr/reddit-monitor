@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchSubredditPosts } from "@/lib/reddit";
-import { getKeywordsForProject, calculateRelevance } from "@/lib/keywords";
-import { detectCrosspost, RedditPostWithCrosspost } from "@/lib/crosspost";
+import { getKeywordsForProject } from "@/lib/keywords";
 import { sampleSubredditEngagement } from "@/lib/analytics";
+import { upsertScannedPost } from "@/lib/monitored-posts";
 
 // This endpoint is called by the cron scheduler to poll subreddits
 export async function POST(req: NextRequest) {
@@ -20,12 +20,16 @@ export async function POST(req: NextRequest) {
   });
 
   let totalFound = 0;
+  let totalUpdated = 0;
   let crosspostsFound = 0;
   let totalScanned = 0;
   const sampledSubs = new Set<string>();
 
   for (const project of projects) {
     const keywords = await getKeywordsForProject(project.id);
+    if (keywords.global.length === 0 && keywords.contextual.length === 0) {
+      continue;
+    }
 
     for (const sub of project.subreddits) {
       try {
@@ -43,39 +47,17 @@ export async function POST(req: NextRequest) {
         }
 
         for (const post of posts) {
-          const existing = await prisma.monitoredPost.findUnique({
-            where: { redditId_projectId: { redditId: post.name, projectId: project.id } },
+          const result = await upsertScannedPost({
+            projectId: project.id,
+            subredditTargetId: sub.id,
+            subredditName: sub.name,
+            post,
+            keywords,
           });
-          if (existing) continue;
 
-          const { score, matched } = calculateRelevance(post.title, post.selftext, keywords, sub.name);
-          if (score === 0) continue;
-
-          const crosspostInfo = await detectCrosspost(post as RedditPostWithCrosspost);
-          if (crosspostInfo.isCrosspost) crosspostsFound++;
-
-          await prisma.monitoredPost.create({
-            data: {
-              redditId: post.name,
-              subreddit: post.subreddit,
-              title: post.title,
-              selftext: post.selftext || "",
-              author: post.author,
-              url: post.url,
-              permalink: `https://reddit.com${post.permalink}`,
-              score: post.score,
-              numComments: post.num_comments,
-              createdUtc: new Date(post.created_utc * 1000),
-              relevanceScore: score,
-              matchedKeywords: matched.join(","),
-              projectId: project.id,
-              subredditTargetId: sub.id,
-              isCrosspost: crosspostInfo.isCrosspost,
-              crosspostParentId: crosspostInfo.crosspostParentId,
-              crosspostGroupId: crosspostInfo.crosspostGroupId,
-            },
-          });
-          totalFound++;
+          if (result.action === "created") totalFound++;
+          if (result.action === "updated") totalUpdated++;
+          if (result.isCrosspost) crosspostsFound++;
         }
       } catch (err) {
         console.error(`Cron poll error for r/${sub.name} (${project.name}):`, err);
@@ -83,5 +65,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ scanned: totalScanned, found: totalFound, crossposts: crosspostsFound });
+  return NextResponse.json({
+    scanned: totalScanned,
+    found: totalFound,
+    updated: totalUpdated,
+    crossposts: crosspostsFound,
+  });
 }

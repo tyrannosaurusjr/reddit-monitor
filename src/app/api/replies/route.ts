@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getNextStaggeredTime } from "@/lib/stagger";
 import { authenticateRequest, verifyProjectOwnership } from "@/lib/api-auth";
+import { syncMonitoredPostStatus } from "@/lib/monitored-posts";
+
+const ACTIVE_REPLY_STATUSES = ["draft", "scheduled", "failed"];
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateRequest();
@@ -40,6 +43,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid project" }, { status: 403 });
   }
 
+  const post = await prisma.monitoredPost.findFirst({
+    where: {
+      id: postId,
+      projectId,
+      project: { userId: auth.userId },
+    },
+    select: { id: true },
+  });
+
+  if (!post) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
+  }
+
   let finalScheduledFor: Date | null = null;
   let staggerDelay: number | null = null;
 
@@ -49,23 +65,38 @@ export async function POST(req: NextRequest) {
     staggerDelay = Math.round((finalScheduledFor.getTime() - baseTime.getTime()) / 60000);
   }
 
-  const reply = await prisma.draftReply.create({
-    data: {
+  const existingActiveReply = await prisma.draftReply.findFirst({
+    where: {
       postId,
-      projectId,
-      content,
-      status: finalScheduledFor ? "scheduled" : "draft",
-      scheduledFor: finalScheduledFor,
-      staggerDelay,
+      status: { in: ACTIVE_REPLY_STATUSES },
     },
+    select: { id: true },
   });
 
-  await prisma.monitoredPost.update({
-    where: { id: postId },
-    data: { status: "queued" },
-  });
+  const replyData = {
+    content,
+    status: finalScheduledFor ? "scheduled" : "draft",
+    scheduledFor: finalScheduledFor,
+    staggerDelay,
+    errorMessage: null,
+  };
 
-  return NextResponse.json(reply, { status: 201 });
+  const reply = existingActiveReply
+    ? await prisma.draftReply.update({
+        where: { id: existingActiveReply.id },
+        data: replyData,
+      })
+    : await prisma.draftReply.create({
+        data: {
+          postId,
+          projectId,
+          ...replyData,
+        },
+      });
+
+  await prisma.monitoredPost.update({ where: { id: postId }, data: { status: "queued" } });
+
+  return NextResponse.json(reply, { status: existingActiveReply ? 200 : 201 });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -76,7 +107,10 @@ export async function PATCH(req: NextRequest) {
 
   const reply = await prisma.draftReply.findUnique({
     where: { id },
-    include: { project: { select: { userId: true } } },
+    select: {
+      postId: true,
+      project: { select: { userId: true } },
+    },
   });
   if (!reply || reply.project.userId !== auth.userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -88,6 +122,7 @@ export async function PATCH(req: NextRequest) {
   if (scheduledFor !== undefined) data.scheduledFor = scheduledFor ? new Date(scheduledFor) : null;
 
   const updated = await prisma.draftReply.update({ where: { id }, data });
+  await syncMonitoredPostStatus(reply.postId);
   return NextResponse.json(updated);
 }
 
@@ -98,12 +133,16 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   const reply = await prisma.draftReply.findUnique({
     where: { id },
-    include: { project: { select: { userId: true } } },
+    select: {
+      postId: true,
+      project: { select: { userId: true } },
+    },
   });
   if (!reply || reply.project.userId !== auth.userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   await prisma.draftReply.delete({ where: { id } });
+  await syncMonitoredPostStatus(reply.postId);
   return NextResponse.json({ success: true });
 }
