@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/post-replies", "schedule": "*/15 * * * *" }
+  ]
+}
